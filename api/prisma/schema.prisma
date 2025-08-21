@@ -1152,6 +1152,7 @@ model public_researcher {
   technological_product              technological_product[]
   departament_researcher             departament_researcher[]
   researcher                         ufmg_researcher?
+  tags                               researcher_tags_on_researchers[]
 
   @@index([abstract_en(ops: raw("gin_trgm_ops"))], type: Gin)
   @@index([abstract(ops: raw("gin_trgm_ops"))], type: Gin)
@@ -1535,5 +1536,26 @@ enum routine_type {
   OPEN_ALEX
   SEARCH_TERM
 
+  @@schema("public")
+}
+
+model researcher_tags {
+  id          String                           @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  created_at  DateTime                         @default(now()) @db.Timestamp(6)
+  name        String?                          @db.VarChar(100)
+  researchers researcher_tags_on_researchers[]
+
+  @@map("researcher_tags")
+  @@schema("public")
+}
+
+model researcher_tags_on_researchers {
+  researcher_id String            @db.Uuid
+  tag_id        String            @db.Uuid
+  researcher    public_researcher @relation(fields: [researcher_id], references: [id], onDelete: Cascade)
+  tag           researcher_tags   @relation(fields: [tag_id], references: [id], onDelete: Cascade)
+  assigned_at   DateTime          @default(now()) @db.Timestamp(6)
+
+  @@id([researcher_id, tag_id])
   @@schema("public")
 }
