@@ -13,6 +13,9 @@ services:
     container_name: ${NOME_CONTAINER_DB}
 
   front-end:
+    depends_on: 
+      api:
+        condition: service_started
     build:
       context: ./classificacao-front
       dockerfile: front.dockerfile
@@ -24,5 +27,24 @@ services:
       - ./classificacao-front:/app
       - /app/node_modules
     command: npm run dev
+
+  api:
+    depends_on: 
+      database:
+        condition: service_started
+    build: 
+      context: ./api
+      dockerfile: api.dockerfile
+    image: ${NOME_IMAGEM_API}
+    container_name: ${NOME_CONTAINER_API}
+    ports:
+      - "${PORT_HOST_API}:${PORT_CONTAINER_API}"
+    volumes:
+      - ./api:/app
+      - /app/node_modules
+    environment:
+      FRONT_URL: "http://localhost:${PORT_HOST_FRONT}"
+      API_PORT: ${PORT_CONTAINER_API}
+
 volumes:
   pgdata:
