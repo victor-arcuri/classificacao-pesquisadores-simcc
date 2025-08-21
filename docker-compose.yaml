@@ -1,8 +1,8 @@
 version: '3.8'
 
 services:
-    database:
-    image: postgres
+  database:
+    image: pgvector/pgvector:pg17
     restart: always
     environment:
       POSTGRES_PASSWORD: ${DB_SENHA}
@@ -22,5 +22,7 @@ services:
     volumes:
       - ./classificacao-front:/app
       - /app/node_modules
-
     command: npm run dev
+
+volumes:
+  pgdata:
