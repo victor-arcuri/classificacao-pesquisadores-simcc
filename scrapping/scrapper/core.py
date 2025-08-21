@@ -1,5 +1,4 @@
 # Importa as bibliotecas necessárias do Selenium
-import json
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
@@ -90,7 +89,3 @@ dados_pesquisador = {
     # "publicacoes": []  # Comece com uma lista vazia
 }
         
-with open('dados_pesquisador.json', 'w', encoding='utf-8') as f:
-    json.dump(dados_pesquisador, f, ensure_ascii=False, indent=4)
-
-print("Arquivo JSON salvo com sucesso!")
