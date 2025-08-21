@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  front-end:
+    build:
+      context: ./classificacao-front
+      dockerfile: front.dockerfile
+    image: ${NOME_IMAGEM_FRONT}
+    container_name: ${NOME_CONTAINER_FRONT}
+    ports:
+      - "${PORT_HOST_FRONT}:${PORT_CONTAINER_FRONT}"
+    volumes:
+      - ./classificacao-front:/app
+      - /app/node_modules
+
+    command: npm run dev
