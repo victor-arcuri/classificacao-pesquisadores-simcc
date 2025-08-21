@@ -8,6 +8,7 @@ services:
       POSTGRES_PASSWORD: ${DB_SENHA}
     volumes:
       - pgdata:/var/lib/postgresql/data
+      - ./database/init_scripts:/docker-entrypoint-initdb.d
     ports: 
       - "${DB_PORT_HOST}:${DB_PORT_CONTAINER}"
     container_name: ${NOME_CONTAINER_DB}
@@ -45,6 +46,8 @@ services:
     environment:
       FRONT_URL: "http://localhost:${PORT_HOST_FRONT}"
       API_PORT: ${PORT_CONTAINER_API}
+      DATABASE_URL: "postgresql://${DB_USERNAME}:${DB_SENHA}@database:${DB_PORT_CONTAINER}/${DB_NAME}"
+    command: npm run dev
 
 volumes:
   pgdata:
