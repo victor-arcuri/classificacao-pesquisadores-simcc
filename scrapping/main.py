@@ -26,6 +26,11 @@ def exibir_resultados(dados):
         print(f"\n--- Projeto {i} ---")
         print(projeto)
     print("\n------------------\n")
+    
+    for i, patente in enumerate(dados['patentes'], 1):
+        print(f"\n--- Patente {i} ---")
+        print(patente)
+    print("\n------------------\n")
 
 def main():
     """Função principal que executa o scraper."""
