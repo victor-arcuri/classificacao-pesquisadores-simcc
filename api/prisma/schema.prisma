@@ -42,7 +42,7 @@ model admin_graduate_program {
   updated_at                  DateTime?                           @default(now()) @db.Timestamp(6)
   institution                 admin_institution                   @relation(fields: [institution_id], references: [institution_id], onDelete: Cascade)
   graduate_program_researcher admin_graduate_program_researcher[]
-  graduate_program_student    admin_graduate_program_student[]    @ignore
+  graduate_program_student    admin_graduate_program_student[] @ignore
 
   @@map("graduate_program")
   @@schema("admin")
@@ -122,7 +122,7 @@ model admin_researcher {
   created_at                  DateTime?                           @default(now()) @db.Timestamp(6)
   updated_at                  DateTime?                           @default(now()) @db.Timestamp(6)
   graduate_program_researcher admin_graduate_program_researcher[]
-  graduate_program_student    admin_graduate_program_student[]    @ignore
+  graduate_program_student    admin_graduate_program_student[] @ignore
   researcher_institution      researcher_institution[]
   department_researcher       department_researcher[]
   researcher                  admin_ufmg_researcher?
@@ -736,7 +736,7 @@ model public_graduate_program {
   updated_at                  DateTime?                            @default(now()) @db.Timestamp(6)
   institution                 public_institution                   @relation(fields: [institution_id], references: [id], onDelete: Cascade)
   graduate_program_researcher public_graduate_program_researcher[]
-  graduate_program_student    public_graduate_program_student[]    @ignore
+  graduate_program_student    public_graduate_program_student[] @ignore
   research_lines_programs     research_lines_programs[]
 
   @@map("graduate_program")
@@ -1037,7 +1037,7 @@ model research_project {
   description                 String?
   researcher                  public_researcher             @relation(fields: [researcher_id], references: [id], onDelete: Cascade)
   research_project_components research_project_components[] @ignore
-  research_project_foment     research_project_foment[]     @ignore
+  research_project_foment     research_project_foment[] @ignore
   research_project_production research_project_production[] @ignore
 
   @@schema("public")
@@ -1127,11 +1127,11 @@ model public_researcher {
   didactic_material                  didactic_material[]
   education                          education[]
   event_organization                 event_organization[]
-  foment                             foment[]                             @ignore
-  graduate_program_researcher        public_graduate_program_researcher[] @ignore
-  graduate_program_student           public_graduate_program_student[]    @ignore
+  foment                             foment[] @ignore
+  graduate_program_researcher        public_graduate_program_researcher[]
+  graduate_program_student           public_graduate_program_student[] @ignore
   guidance                           guidance[]
-  openalex_researcher                openalex_researcher?                 @ignore
+  openalex_researcher                openalex_researcher? @ignore
   participation_events               participation_events[]
   patent                             public_patent[]
   relevant_production                relevant_production[]
@@ -1145,6 +1145,7 @@ model public_researcher {
   researcher_ind_prod                researcher_ind_prod[]
   researcher_production              researcher_production[]
   researcher_professional_experience researcher_professional_experience[]
+  tags                               researcher_tags_on_researchers[]
   software                           software[]
   technical_work                     technical_work[]
   technical_work_presentation        technical_work_presentation[]
@@ -1152,7 +1153,6 @@ model public_researcher {
   technological_product              technological_product[]
   departament_researcher             departament_researcher[]
   researcher                         ufmg_researcher?
-  tags                               researcher_tags_on_researchers[]
 
   @@index([abstract_en(ops: raw("gin_trgm_ops"))], type: Gin)
   @@index([abstract(ops: raw("gin_trgm_ops"))], type: Gin)
@@ -1493,6 +1493,30 @@ model ufmg_technician {
   @@schema("ufmg")
 }
 
+model researcher_tags {
+  id            String                           @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  created_at    DateTime                         @default(now()) @db.Timestamp(6)
+  name          String?                          @db.VarChar(100)
+  search_vector Unsupported("tsvector")?         @default(dbgenerated("setweight(to_tsvector('portuguese'::regconfig, (COALESCE(name, ''::character varying))::text), 'A'::\"char\")"))
+  researchers   researcher_tags_on_researchers[]
+
+  @@index([name(ops: raw("gin_trgm_ops"))], type: Gin)
+  @@index([search_vector], map: "researcher_tags_search_idx", type: Gin)
+  @@map("researcher_tags")
+  @@schema("public")
+}
+
+model researcher_tags_on_researchers {
+  researcher_id String            @db.Uuid
+  tag_id        String            @db.Uuid
+  assigned_at   DateTime          @default(now()) @db.Timestamp(6)
+  researcher    public_researcher @relation(fields: [researcher_id], references: [id], onDelete: Cascade)
+  tag           researcher_tags   @relation(fields: [tag_id], references: [id], onDelete: Cascade)
+
+  @@id([researcher_id, tag_id])
+  @@schema("public")
+}
+
 enum bibliographic_production_type_enum {
   BOOK
   BOOK_CHAPTER
@@ -1536,26 +1560,5 @@ enum routine_type {
   OPEN_ALEX
   SEARCH_TERM
 
-  @@schema("public")
-}
-
-model researcher_tags {
-  id          String                           @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  created_at  DateTime                         @default(now()) @db.Timestamp(6)
-  name        String?                          @db.VarChar(100)
-  researchers researcher_tags_on_researchers[]
-
-  @@map("researcher_tags")
-  @@schema("public")
-}
-
-model researcher_tags_on_researchers {
-  researcher_id String            @db.Uuid
-  tag_id        String            @db.Uuid
-  researcher    public_researcher @relation(fields: [researcher_id], references: [id], onDelete: Cascade)
-  tag           researcher_tags   @relation(fields: [tag_id], references: [id], onDelete: Cascade)
-  assigned_at   DateTime          @default(now()) @db.Timestamp(6)
-
-  @@id([researcher_id, tag_id])
   @@schema("public")
 }

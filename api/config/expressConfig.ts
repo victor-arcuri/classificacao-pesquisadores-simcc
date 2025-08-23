@@ -1,6 +1,7 @@
 import express, { Express } from 'express';
 import cors, { CorsOptions } from 'cors';
 import dotenv from 'dotenv';
+import searchRouter from '../src/controllers/search_controller.js'
 
 dotenv.config();
 
@@ -19,3 +20,5 @@ app.use(
         extended: true,
     }),
 );
+
+app.use('/search', searchRouter);
