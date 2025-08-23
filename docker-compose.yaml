@@ -1,6 +1,17 @@
 version: '3.8'
 
 services:
+  database:
+    image: pgvector/pgvector:pg17
+    restart: always
+    environment:
+      POSTGRES_PASSWORD: ${DB_SENHA}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports: 
+      - "${DB_PORT_HOST}:${DB_PORT_CONTAINER}"
+    container_name: ${NOME_CONTAINER_DB}
+
   front-end:
     build:
       context: ./classificacao-front
@@ -12,5 +23,7 @@ services:
     volumes:
       - ./classificacao-front:/app
       - /app/node_modules
-
     command: npm run dev
+
+volumes:
+  pgdata:
