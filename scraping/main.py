@@ -1,5 +1,5 @@
-from scrapper.driver_config import configurar_chrome_driver
-from scrapper.core_scraper import raspar_dados_pesquisador
+from scraper.driver_config import configurar_chrome_driver
+from scraper.core_scraper import raspar_dados_pesquisador
 
 # Coloque aqui url da página do pesquisador desejado
 URL_PESQUISADOR = "https://simcc.uesc.br/researcher?researcher_name=Eduardo%20Manuel%20de%20Freitas%20Jorge&search_type=name&terms="
@@ -30,6 +30,11 @@ def exibir_resultados(dados):
     for i, patente in enumerate(dados['patentes'], 1):
         print(f"\n--- Patente {i} ---")
         print(patente)
+    print("\n------------------\n")
+    
+    for i, capitulo in enumerate(dados['capitulos'], 1):
+        print(f"\n--- Capítulos de livros {i} ---")
+        print(capitulo)
     print("\n------------------\n")
 
 def main():
