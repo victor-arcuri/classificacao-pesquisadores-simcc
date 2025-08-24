@@ -12,8 +12,8 @@ SELETOR_CONTEUDO_PROJETOS = "div[data-state='open'] div.p-4.pb-0 p.text-sm.capit
 XPATH_BOTAO_PRODUCAO_TECNICA = "//button[contains(text(), 'Produção técnica')]"
 SELETOR_TODOS_TITULOS_PRODUCAO_TECNICA = "div[data-state='open'] h3.text-sm.capitalize"
 XPATH_BOTAO_PROJETOS = "//button[contains(text(), 'Projetos de pesquisa')]"
+XPATH_BOTAO_CAPITULOS = "//button[contains(text(), 'Livros e capítulos')]"
 XPATH_MOSTRAR_MAIS_NA_ABA_ATIVA = "//div[@data-state='open']//button[contains(text(), 'Mostrar mais')]"
-
 
 # --- FUNÇÃO AUXILIAR CORRIGIDA E MAIS ROBUSTA ---
 def eh_uma_patente(elemento_h3):
@@ -89,6 +89,7 @@ def raspar_dados_pesquisador(driver, url):
         time.sleep(1)
         driver.execute_script("arguments[0].click();", producao_tecnica_button)
         time.sleep(2)
+        _clicar_em_todos_mostrar_mais(driver)
         
         print("Extraindo a lista completa de produções técnicas para filtrar as patentes...")
         todos_titulos_elements = driver.find_elements(By.CSS_SELECTOR, SELETOR_TODOS_TITULOS_PRODUCAO_TECNICA)
