@@ -1,0 +1,1564 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["admin", "admin_ufmg", "embeddings", "logs", "public", "ufmg"]
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model feedback {
+  id          String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  name        String    @db.VarChar(100)
+  email       String    @db.VarChar(255)
+  rating      Int
+  description String?
+  created_at  DateTime? @default(now()) @db.Timestamp(6)
+
+  @@schema("admin")
+}
+
+model admin_graduate_program {
+  graduate_program_id         String                              @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  code                        String?                             @unique @db.VarChar(100)
+  name                        String                              @db.VarChar(100)
+  area                        String                              @db.VarChar(100)
+  modality                    String                              @db.VarChar(100)
+  type                        String?                             @db.VarChar(100)
+  rating                      String?                             @db.VarChar(5)
+  institution_id              String                              @db.Uuid
+  state                       String?                             @default("BA") @db.VarChar(4)
+  city                        String?                             @default("Salvador") @db.VarChar(100)
+  region                      String?                             @default("Nordeste") @db.VarChar(100)
+  url_image                   String?                             @db.VarChar(200)
+  acronym                     String?                             @db.VarChar(100)
+  description                 String?
+  visible                     Boolean?                            @default(false)
+  site                        String?
+  menagers                    String[]
+  created_at                  DateTime?                           @default(now()) @db.Timestamp(6)
+  updated_at                  DateTime?                           @default(now()) @db.Timestamp(6)
+  institution                 admin_institution                   @relation(fields: [institution_id], references: [institution_id], onDelete: Cascade)
+  graduate_program_researcher admin_graduate_program_researcher[]
+  graduate_program_student    admin_graduate_program_student[] @ignore
+
+  @@map("graduate_program")
+  @@schema("admin")
+}
+
+model admin_graduate_program_researcher {
+  graduate_program_id String                 @db.Uuid
+  researcher_id       String                 @db.Uuid
+  year                Int[]
+  type_               relationship?
+  created_at          DateTime?              @default(now()) @db.Timestamp(6)
+  updated_at          DateTime?              @default(now()) @db.Timestamp(6)
+  graduate_program    admin_graduate_program @relation(fields: [graduate_program_id], references: [graduate_program_id], onDelete: Cascade)
+  researcher          admin_researcher       @relation(fields: [researcher_id], references: [researcher_id], onDelete: Cascade)
+
+  @@id([graduate_program_id, researcher_id])
+  @@map("graduate_program_researcher")
+  @@schema("admin")
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model admin_graduate_program_student {
+  graduate_program_id String                 @db.Uuid
+  researcher_id       String                 @db.Uuid
+  year                Int[]
+  created_at          DateTime?              @default(now()) @db.Timestamp(6)
+  updated_at          DateTime?              @default(now()) @db.Timestamp(6)
+  graduate_program    admin_graduate_program @relation(fields: [graduate_program_id], references: [graduate_program_id], onDelete: Cascade)
+  researcher          admin_researcher       @relation(fields: [researcher_id], references: [researcher_id], onDelete: Cascade)
+
+  @@id([graduate_program_id, researcher_id, year])
+  @@map("graduate_program_student")
+  @@ignore
+  @@schema("admin")
+}
+
+model admin_institution {
+  institution_id         String                   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  name                   String                   @db.VarChar(255)
+  acronym                String?                  @unique @db.VarChar(50)
+  lattes_id              String?                  @db.Char(16)
+  created_at             DateTime?                @default(now()) @db.Timestamp(6)
+  updated_at             DateTime?                @default(now()) @db.Timestamp(6)
+  graduate_program       admin_graduate_program[]
+  researcher_institution researcher_institution[]
+  users                  users[]
+  weights                weights?
+
+  @@map("institution")
+  @@schema("admin")
+}
+
+model newsletter_subscribers {
+  id            String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  email         String    @unique @db.VarChar(255)
+  subscribed_at DateTime? @default(now()) @db.Timestamp(6)
+
+  @@schema("admin")
+}
+
+model permission {
+  id         String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  role_id    String @db.Uuid
+  permission String @db.VarChar(255)
+  roles      roles  @relation(fields: [role_id], references: [id], onDelete: Cascade)
+
+  @@unique([role_id, permission])
+  @@schema("admin")
+}
+
+model admin_researcher {
+  researcher_id               String                              @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  name                        String                              @db.VarChar(150)
+  lattes_id                   String?                             @unique @db.VarChar(20)
+  extra_field                 String?                             @db.VarChar(255)
+  status                      Boolean                             @default(true)
+  created_at                  DateTime?                           @default(now()) @db.Timestamp(6)
+  updated_at                  DateTime?                           @default(now()) @db.Timestamp(6)
+  graduate_program_researcher admin_graduate_program_researcher[]
+  graduate_program_student    admin_graduate_program_student[] @ignore
+  researcher_institution      researcher_institution[]
+  department_researcher       department_researcher[]
+  researcher                  admin_ufmg_researcher?
+
+  @@map("researcher")
+  @@schema("admin")
+}
+
+model researcher_institution {
+  researcher_institution_id String            @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  researcher_id             String            @db.Uuid
+  institution_id            String            @db.Uuid
+  start_date                DateTime?         @default(dbgenerated("CURRENT_DATE")) @db.Date
+  end_date                  DateTime?         @db.Date
+  is_current                Boolean?          @default(true)
+  created_at                DateTime?         @default(now()) @db.Timestamp(6)
+  updated_at                DateTime?         @default(now()) @db.Timestamp(6)
+  institution               admin_institution @relation(fields: [institution_id], references: [institution_id], onDelete: Cascade)
+  researcher                admin_researcher  @relation(fields: [researcher_id], references: [researcher_id], onDelete: Cascade)
+
+  @@unique([researcher_id, institution_id, is_current])
+  @@schema("admin")
+}
+
+model roles {
+  id          String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  role        String        @unique @db.VarChar(255)
+  permission  permission[]
+  users_roles users_roles[]
+
+  @@schema("admin")
+}
+
+model users {
+  user_id        String             @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  display_name   String             @db.VarChar(255)
+  email          String             @unique @db.VarChar(255)
+  uid            String             @unique @db.VarChar(255)
+  photo_url      String?
+  lattes_id      String?            @db.VarChar(255)
+  institution_id String?            @db.Uuid
+  provider       String?            @db.VarChar(255)
+  linkedin       String?            @db.VarChar(255)
+  verify         Boolean?           @default(false)
+  shib_id        String?            @db.VarChar(255)
+  shib_code      String?            @db.VarChar(255)
+  birth_date     String?            @db.VarChar(10)
+  course_level   String?            @db.VarChar(255)
+  first_name     String?            @db.VarChar(255)
+  registration   String?            @db.VarChar(255)
+  gender         String?            @db.VarChar(50)
+  last_name      String?            @db.VarChar(255)
+  email_status   String?            @db.VarChar(50)
+  visible_email  Boolean?
+  created_at     DateTime?          @default(now()) @db.Timestamp(6)
+  updated_at     DateTime?          @default(now()) @db.Timestamp(6)
+  institution    admin_institution? @relation(fields: [institution_id], references: [institution_id])
+  users_roles    users_roles[]
+
+  @@schema("admin")
+}
+
+model users_roles {
+  role_id String @db.Uuid
+  user_id String @db.Uuid
+  roles   roles  @relation(fields: [role_id], references: [id], onDelete: Cascade)
+  users   users  @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+
+  @@id([role_id, user_id])
+  @@schema("admin")
+}
+
+model weights {
+  institution_id     String            @id @db.Uuid
+  a1                 Decimal?          @db.Decimal(20, 3)
+  a2                 Decimal?          @db.Decimal(20, 3)
+  a3                 Decimal?          @db.Decimal(20, 3)
+  a4                 Decimal?          @db.Decimal(20, 3)
+  b1                 Decimal?          @db.Decimal(20, 3)
+  b2                 Decimal?          @db.Decimal(20, 3)
+  b3                 Decimal?          @db.Decimal(20, 3)
+  b4                 Decimal?          @db.Decimal(20, 3)
+  c                  Decimal?          @db.Decimal(20, 3)
+  sq                 Decimal?          @db.Decimal(20, 3)
+  book               Decimal?          @db.Decimal(20, 3)
+  book_chapter       Decimal?          @db.Decimal(20, 3)
+  software           String?           @db.VarChar
+  patent_granted     String?           @db.VarChar
+  patent_not_granted String?           @db.VarChar
+  report             String?           @db.VarChar
+  f1                 Decimal?          @default(0) @db.Decimal(20, 3)
+  f2                 Decimal?          @default(0) @db.Decimal(20, 3)
+  f3                 Decimal?          @default(0) @db.Decimal(20, 3)
+  f4                 Decimal?          @default(0) @db.Decimal(20, 3)
+  f5                 Decimal?          @default(0) @db.Decimal(20, 3)
+  institution        admin_institution @relation(fields: [institution_id], references: [institution_id], onDelete: Cascade)
+
+  @@schema("admin")
+}
+
+model department {
+  dep_id                String                  @id @db.VarChar(20)
+  org_cod               String?                 @db.VarChar(3)
+  dep_nom               String?                 @db.VarChar(100)
+  dep_des               String?
+  dep_email             String?                 @db.VarChar(100)
+  dep_site              String?                 @db.VarChar(100)
+  dep_sigla             String?                 @db.VarChar(30)
+  dep_tel               String?                 @db.VarChar(20)
+  img_data              Bytes?
+  department_researcher department_researcher[]
+  department_technician department_technician[]
+  disciplines           disciplines[]
+
+  @@schema("admin_ufmg")
+}
+
+model department_researcher {
+  dep_id        String           @db.VarChar(20)
+  researcher_id String           @db.Uuid
+  department    department       @relation(fields: [dep_id], references: [dep_id], onDelete: Cascade)
+  researcher    admin_researcher @relation(fields: [researcher_id], references: [researcher_id], onDelete: Cascade)
+
+  @@id([dep_id, researcher_id])
+  @@schema("admin_ufmg")
+}
+
+model department_technician {
+  dep_id        String                @db.VarChar(20)
+  technician_id String                @db.Uuid
+  department    department            @relation(fields: [dep_id], references: [dep_id], onDelete: Cascade)
+  technician    admin_ufmg_technician @relation(fields: [technician_id], references: [technician_id], onDelete: Cascade)
+
+  @@id([dep_id, technician_id])
+  @@schema("admin_ufmg")
+}
+
+model disciplines {
+  discipline_id          String      @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  dep_id                 String?     @db.VarChar(20)
+  semester               String?     @db.VarChar(20)
+  department             String?     @db.VarChar(255)
+  academic_activity_code String?     @db.VarChar(255)
+  academic_activity_name String?     @db.VarChar(255)
+  academic_activity_ch   String?     @db.VarChar(255)
+  demanding_courses      String?     @db.VarChar(255)
+  oft                    String?     @db.VarChar(50)
+  available_slots        String?     @db.VarChar(50)
+  occupied_slots         String?     @db.VarChar(50)
+  percent_occupied_slots String?     @db.VarChar(50)
+  schedule               String?     @db.VarChar(255)
+  language               String?     @db.VarChar(50)
+  researcher_id          String[]    @db.Uuid
+  researcher_name        String[]    @db.VarChar
+  status                 String?     @db.VarChar(50)
+  workload               String[]    @db.VarChar
+  rel_department         department? @relation(fields: [dep_id], references: [dep_id])
+
+  @@schema("admin_ufmg")
+}
+
+model admin_ufmg_researcher {
+  researcher_id                 String           @id @db.Uuid
+  full_name                     String?          @db.VarChar(255)
+  gender                        String?          @db.VarChar(255)
+  status_code                   String?          @db.VarChar(255)
+  work_regime                   String?          @db.VarChar(255)
+  job_class                     String?          @db.Char(25)
+  job_title                     String?          @db.VarChar(255)
+  job_rank                      String?          @db.VarChar(255)
+  job_reference_code            String?          @db.VarChar(255)
+  academic_degree               String?          @db.VarChar(255)
+  organization_entry_date       DateTime?        @db.Date
+  last_promotion_date           DateTime?        @db.Date
+  employment_status_description String?          @db.VarChar(255)
+  department_name               String?          @db.VarChar(255)
+  career_category               String?          @db.VarChar(255)
+  academic_unit                 String?          @db.VarChar(255)
+  unit_code                     String?          @db.VarChar(255)
+  function_code                 String?          @db.VarChar(255)
+  position_code                 String?          @db.VarChar(255)
+  leadership_start_date         DateTime?        @db.Date
+  leadership_end_date           DateTime?        @db.Date
+  current_function_name         String?          @db.VarChar(255)
+  function_location             String?          @db.VarChar(255)
+  registration_number           String?          @db.VarChar(200)
+  ufmg_registration_number      String?          @db.VarChar(200)
+  semester_reference            String?          @db.VarChar(6)
+  researcher                    admin_researcher @relation(fields: [researcher_id], references: [researcher_id], onDelete: Cascade)
+
+  @@map("researcher")
+  @@schema("admin_ufmg")
+}
+
+model admin_ufmg_technician {
+  technician_id                 String                  @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  full_name                     String?                 @db.VarChar(255)
+  gender                        String?                 @db.VarChar(255)
+  status_code                   String?                 @db.VarChar(255)
+  work_regime                   String?                 @db.VarChar(255)
+  job_class                     String?                 @db.Char(25)
+  job_title                     String?                 @db.VarChar(255)
+  job_rank                      String?                 @db.VarChar(255)
+  job_reference_code            String?                 @db.VarChar(255)
+  academic_degree               String?                 @db.VarChar(255)
+  organization_entry_date       DateTime?               @db.Date
+  last_promotion_date           DateTime?               @db.Date
+  employment_status_description String?                 @db.VarChar(255)
+  department_name               String?                 @db.VarChar(255)
+  career_category               String?                 @db.VarChar(255)
+  academic_unit                 String?                 @db.VarChar(255)
+  unit_code                     String?                 @db.VarChar(255)
+  function_code                 String?                 @db.VarChar(255)
+  position_code                 String?                 @db.VarChar(255)
+  leadership_start_date         DateTime?               @db.Date
+  leadership_end_date           DateTime?               @db.Date
+  current_function_name         String?                 @db.VarChar(255)
+  function_location             String?                 @db.VarChar(255)
+  registration_number           String?                 @db.VarChar(255)
+  ufmg_registration_number      String?                 @db.VarChar(255)
+  semester_reference            String?                 @db.VarChar(6)
+  department_technician         department_technician[]
+
+  @@map("technician")
+  @@schema("admin_ufmg")
+}
+
+model abstract {
+  id           String                 @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  reference_id String?                @db.Uuid
+  embeddings   Unsupported("vector")?
+  price        Decimal?               @db.Decimal(20, 18)
+  researcher   public_researcher?     @relation(fields: [reference_id], references: [id], onDelete: Cascade)
+
+  @@schema("embeddings")
+}
+
+model article {
+  id                       String                    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  reference_id             String?                   @db.Uuid
+  embeddings               Unsupported("vector")?
+  price                    Decimal?                  @db.Decimal(20, 18)
+  bibliographic_production bibliographic_production? @relation(fields: [reference_id], references: [id], onDelete: Cascade)
+
+  @@schema("embeddings")
+}
+
+model article_abstract {
+  id               String                 @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  reference_id     String?                @db.Uuid
+  embeddings       Unsupported("vector")?
+  price            Decimal?               @db.Decimal(20, 18)
+  openalex_article openalex_article?      @relation(fields: [reference_id], references: [article_id], onDelete: Cascade)
+
+  @@schema("embeddings")
+}
+
+model book {
+  id                       String                    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  reference_id             String?                   @db.Uuid
+  embeddings               Unsupported("vector")?
+  price                    Decimal?                  @db.Decimal(20, 18)
+  bibliographic_production bibliographic_production? @relation(fields: [reference_id], references: [id], onDelete: Cascade)
+
+  @@schema("embeddings")
+}
+
+model event {
+  id                       String                    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  reference_id             String?                   @db.Uuid
+  embeddings               Unsupported("vector")?
+  price                    Decimal?                  @db.Decimal(20, 18)
+  bibliographic_production bibliographic_production? @relation(fields: [reference_id], references: [id], onDelete: Cascade)
+
+  @@schema("embeddings")
+}
+
+model embeddings_patent {
+  id           String                 @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  reference_id String?                @db.Uuid
+  embeddings   Unsupported("vector")?
+  price        Decimal?               @db.Decimal(20, 18)
+  patent       public_patent?         @relation(fields: [reference_id], references: [id], onDelete: Cascade)
+
+  @@map("patent")
+  @@schema("embeddings")
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model researcher_routine {
+  researcher_id String       @db.Uuid
+  type          routine_type
+  error         Boolean?     @default(false)
+  detail        String?
+  created_at    DateTime     @default(now()) @db.Timestamp(6)
+
+  @@ignore
+  @@schema("logs")
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model routine {
+  type       routine_type
+  error      Boolean?     @default(false)
+  detail     String?
+  created_at DateTime     @default(now()) @db.Timestamp(6)
+
+  @@ignore
+  @@schema("logs")
+}
+
+model area_expertise {
+  id                        String                      @id(map: "PK_44d189c8477ad880b9ec101d453") @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  name                      String                      @db.VarChar
+  created_at                DateTime                    @default(now()) @db.Timestamp(6)
+  updated_at                DateTime?                   @db.Timestamp(6)
+  deleted_at                DateTime?                   @db.Timestamp(6)
+  great_area_expertise_id   String?                     @db.Uuid
+  great_area_expertise      great_area_expertise?       @relation(fields: [great_area_expertise_id], references: [id], onDelete: Cascade, map: "FK_great_area_expertise")
+  researcher_area_expertise researcher_area_expertise[]
+  sub_area_expertise        sub_area_expertise[]
+
+  @@index([name(ops: raw("gin_trgm_ops"))], type: Gin)
+  @@schema("public")
+}
+
+model area_specialty {
+  id                        String                      @id(map: "pk_id_area_specialty") @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  name                      String                      @db.VarChar
+  sub_area_expertise_id     String                      @db.Uuid
+  created_at                DateTime                    @default(now()) @db.Timestamp(6)
+  updated_at                DateTime?                   @db.Timestamp(6)
+  deleted_at                DateTime?                   @db.Timestamp(6)
+  sub_area_expertise        sub_area_expertise          @relation(fields: [sub_area_expertise_id], references: [id], onDelete: Cascade)
+  researcher_area_expertise researcher_area_expertise[]
+
+  @@schema("public")
+}
+
+model artistic_production {
+  id            String            @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  researcher_id String            @db.Uuid
+  title         String
+  year          Int?
+  researcher    public_researcher @relation(fields: [researcher_id], references: [id], onDelete: Cascade, map: "fk_researcher")
+
+  @@schema("public")
+}
+
+model bibliographic_production {
+  id                                     String                                  @id(map: "PK_9c61219aee0513e9a1cf707a41a") @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  title                                  String                                  @db.VarChar(500)
+  title_en                               String?                                 @db.VarChar(500)
+  type                                   bibliographic_production_type_enum
+  doi                                    String?                                 @db.VarChar
+  nature                                 String?                                 @db.VarChar(50)
+  year                                   String?                                 @db.Char(4)
+  country_id                             String?                                 @db.Uuid
+  language                               String?                                 @db.Char(2)
+  means_divulgation                      String?                                 @db.VarChar(20)
+  homepage                               String?                                 @db.VarChar
+  relevance                              Boolean                                 @default(false)
+  has_image                              Boolean                                 @default(false)
+  scientific_divulgation                 Boolean?                                @default(false)
+  created_at                             DateTime                                @default(now()) @db.Timestamp(6)
+  updated_at                             DateTime?                               @db.Timestamp(6)
+  deleted_at                             DateTime?                               @db.Timestamp(6)
+  researcher_id                          String?                                 @db.Uuid
+  authors                                String?                                 @db.VarChar(1000)
+  year_                                  Int?
+  is_new                                 Boolean?                                @default(true)
+  article                                article[]
+  book                                   book[]
+  event                                  event[]
+  country                                country?                                @relation(fields: [country_id], references: [id], onDelete: Cascade, map: "FKCountryResearcher")
+  researcher                             public_researcher?                      @relation(fields: [researcher_id], references: [id], onDelete: Cascade, map: "fk_researcher_id")
+  bibliographic_production_article       bibliographic_production_article[]
+  bibliographic_production_book          bibliographic_production_book[]
+  bibliographic_production_book_chapter  bibliographic_production_book_chapter[]
+  bibliographic_production_work_in_event bibliographic_production_work_in_event?
+
+  @@index([title(ops: raw("gin_trgm_ops"))], type: Gin)
+  @@schema("public")
+}
+
+model bibliographic_production_article {
+  id                          String                   @id(map: "PK_3a53ca9c0bd82c629e7a14ef0f4") @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  bibliographic_production_id String                   @db.Uuid
+  periodical_magazine_id      String                   @db.Uuid
+  volume                      String?                  @db.VarChar(30)
+  fascicle                    String?                  @db.VarChar(30)
+  series                      String?                  @db.VarChar(30)
+  start_page                  String?                  @db.VarChar(30)
+  end_page                    String?                  @db.VarChar(30)
+  place_publication           String?                  @db.VarChar
+  created_at                  DateTime                 @default(now()) @db.Timestamp(6)
+  updated_at                  DateTime?                @db.Timestamp(6)
+  deleted_at                  DateTime?                @db.Timestamp(6)
+  periodical_magazine_name    String?                  @db.VarChar(600)
+  issn                        String?                  @db.VarChar(20)
+  qualis                      String?                  @default("SQ") @db.VarChar(8)
+  jcr                         String?                  @db.VarChar(100)
+  jcr_link                    String?                  @db.VarChar(200)
+  periodical_magazine         periodical_magazine      @relation(fields: [periodical_magazine_id], references: [id], onDelete: Cascade, map: "FKPeriodicalMagazineArticle")
+  bibliographic_production    bibliographic_production @relation(fields: [bibliographic_production_id], references: [id], onDelete: Cascade, map: "FKPublicationArticle")
+
+  @@schema("public")
+}
+
+model bibliographic_production_book {
+  id                          String                   @id(map: "PK_818a520edae9528a6d586485d18") @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  bibliographic_production_id String                   @db.Uuid
+  isbn                        String?                  @db.Char(13)
+  qtt_volume                  String?                  @db.VarChar(25)
+  qtt_pages                   String?                  @db.VarChar(25)
+  num_edition_revision        String?                  @db.VarChar(25)
+  num_series                  String?                  @db.VarChar(25)
+  publishing_company          String?                  @db.VarChar
+  publishing_company_city     String?                  @db.VarChar
+  created_at                  DateTime                 @default(now()) @db.Timestamp(6)
+  updated_at                  DateTime?                @db.Timestamp(6)
+  deleted_at                  DateTime?                @db.Timestamp(6)
+  bibliographic_production    bibliographic_production @relation(fields: [bibliographic_production_id], references: [id], onDelete: Cascade, map: "FKPublicationBook")
+
+  @@schema("public")
+}
+
+model bibliographic_production_book_chapter {
+  id                          String                   @id(map: "PK_ccc5964c28ffa1e316b8c0c821e") @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  bibliographic_production_id String                   @db.Uuid
+  book_title                  String?                  @db.VarChar
+  isbn                        String?                  @db.Char(13)
+  start_page                  String?                  @db.VarChar(25)
+  end_page                    String?                  @db.VarChar(25)
+  qtt_volume                  String?                  @db.VarChar(25)
+  organizers                  String?                  @db.VarChar(500)
+  num_edition_revision        String?                  @db.VarChar(25)
+  num_series                  String?                  @db.VarChar(25)
+  publishing_company          String?                  @db.VarChar
+  publishing_company_city     String?                  @db.VarChar
+  created_at                  DateTime                 @default(now()) @db.Timestamp(6)
+  updated_at                  DateTime?                @db.Timestamp(6)
+  deleted_at                  DateTime?                @db.Timestamp(6)
+  bibliographic_production    bibliographic_production @relation(fields: [bibliographic_production_id], references: [id], onDelete: Cascade, map: "FKPublicationBookChapter")
+
+  @@schema("public")
+}
+
+model bibliographic_production_work_in_event {
+  bibliographic_production_id String                   @id(map: "pk_bibliographic_production_event_work") @db.Uuid
+  event_classification        String?                  @db.VarChar(100)
+  event_name                  String?                  @db.VarChar(600)
+  event_city                  String?                  @db.VarChar(255)
+  event_year                  Int?
+  proceedings_title           String?                  @db.VarChar(600)
+  volume                      String?                  @db.VarChar(30)
+  issue                       String?                  @db.VarChar(30)
+  series                      String?                  @db.VarChar(100)
+  start_page                  String?                  @db.VarChar(30)
+  end_page                    String?                  @db.VarChar(30)
+  publisher_name              String?                  @db.VarChar(255)
+  publisher_city              String?                  @db.VarChar(255)
+  event_name_english          String?                  @db.VarChar(600)
+  identifier_number           String?                  @db.VarChar(100)
+  isbn                        String?                  @db.VarChar(20)
+  created_at                  DateTime                 @default(now()) @db.Timestamp(6)
+  updated_at                  DateTime?                @db.Timestamp(6)
+  deleted_at                  DateTime?                @db.Timestamp(6)
+  bibliographic_production    bibliographic_production @relation(fields: [bibliographic_production_id], references: [id], onDelete: Cascade, map: "fk_bibliographic_production_event_work_production")
+
+  @@schema("public")
+}
+
+model brand {
+  id            String             @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  created_at    DateTime           @default(now()) @db.Timestamp(6)
+  title         String?            @db.VarChar(400)
+  relevance     Boolean            @default(false)
+  has_image     Boolean            @default(false)
+  goal          String?            @db.VarChar(255)
+  nature        String?            @db.VarChar(100)
+  researcher_id String?            @db.Uuid
+  year          Int?               @db.SmallInt
+  is_new        Boolean?           @default(true)
+  researcher    public_researcher? @relation(fields: [researcher_id], references: [id], onDelete: Cascade, map: "fk_researcher_id")
+
+  @@index([title(ops: raw("gin_trgm_ops"))], type: Gin)
+  @@schema("public")
+}
+
+model city {
+  id         String              @id(map: "PK_b222f51ce26f7e5ca86944a6739") @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  name       String              @db.VarChar
+  country_id String              @db.Uuid
+  state_id   String?             @db.Uuid
+  created_at DateTime            @default(now()) @db.Timestamp(6)
+  updated_at DateTime?           @db.Timestamp(6)
+  deleted_at DateTime?           @db.Timestamp(6)
+  country    country             @relation(fields: [country_id], references: [id], onDelete: Cascade, map: "FKCountryCity")
+  state      state?              @relation(fields: [state_id], references: [id], onDelete: Cascade, map: "FKStateCity")
+  researcher public_researcher[]
+
+  @@schema("public")
+}
+
+model country {
+  id                       String                     @id(map: "PK_bf6e37c231c4f4ea56dcd887269") @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  name                     String                     @unique(map: "UQ_2c5aa339240c0c3ae97fcc9dc4c") @db.VarChar
+  name_pt                  String                     @unique(map: "UQ_f7c67d6e048708bb13b14a0bc1a") @db.VarChar
+  alpha_2_code             String?                    @unique(map: "UQ_69c6da9574151020d186279419f") @db.Char(2)
+  alpha_3_code             String?                    @unique(map: "UQ_9f88595b715818e292be3472256") @db.Char(3)
+  created_at               DateTime                   @default(now()) @db.Timestamp(6)
+  updated_at               DateTime?                  @db.Timestamp(6)
+  deleted_at               DateTime?                  @db.Timestamp(6)
+  bibliographic_production bibliographic_production[]
+  city                     city[]
+  researcher               public_researcher[]
+  state                    state[]
+
+  @@schema("public")
+}
+
+model didactic_material {
+  id            String            @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  researcher_id String            @db.Uuid
+  title         String
+  country       String?           @db.VarChar
+  nature        String?           @db.VarChar
+  description   String?
+  year          Int?
+  researcher    public_researcher @relation(fields: [researcher_id], references: [id], onDelete: Cascade, map: "fk_researcher")
+
+  @@schema("public")
+}
+
+model education {
+  id              String            @id(map: "pk_education") @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  researcher_id   String            @db.Uuid
+  degree          String            @db.VarChar(255)
+  education_name  String?           @db.VarChar(255)
+  education_start Int?
+  education_end   Int?
+  key_words       String?           @db.VarChar(255)
+  institution     String?           @db.VarChar(255)
+  researcher      public_researcher @relation(fields: [researcher_id], references: [id], onDelete: Cascade, map: "fk_researcher_education")
+
+  @@schema("public")
+}
+
+model event_organization {
+  id                   String             @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  created_at           DateTime           @default(now()) @db.Timestamp(6)
+  title                String?            @db.VarChar(500)
+  promoter_institution String?            @db.VarChar(500)
+  nature               String?            @db.VarChar(30)
+  researcher_id        String?            @db.Uuid
+  local                String?            @db.VarChar(500)
+  duration_in_weeks    Int?               @db.SmallInt
+  year                 Int?               @db.SmallInt
+  is_new               Boolean?           @default(true)
+  researcher           public_researcher? @relation(fields: [researcher_id], references: [id], onDelete: Cascade, map: "fk_researcher_id")
+
+  @@index([title(ops: raw("gin_trgm_ops"))], type: Gin)
+  @@schema("public")
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model foment {
+  id                   String             @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  researcher_id        String?            @db.Uuid
+  modality_code        String?            @db.VarChar(50)
+  modality_name        String?            @db.VarChar(255)
+  call_title           String?            @db.VarChar(255)
+  category_level_code  String?            @db.VarChar(50)
+  funding_program_name String?            @db.VarChar(255)
+  institute_name       String?            @db.VarChar(255)
+  aid_quantity         Int?
+  scholarship_quantity Int?
+  researcher           public_researcher? @relation(fields: [researcher_id], references: [id], onDelete: Cascade)
+
+  @@ignore
+  @@schema("public")
+}
+
+model public_graduate_program {
+  graduate_program_id         String                               @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  code                        String?                              @db.VarChar(100)
+  name                        String                               @db.VarChar(100)
+  name_en                     String?                              @db.VarChar(100)
+  basic_area                  String?                              @db.VarChar(100)
+  cooperation_project         String?                              @db.VarChar(100)
+  area                        String                               @db.VarChar(100)
+  modality                    String                               @db.VarChar(100)
+  type                        String?                              @db.VarChar(100)
+  rating                      String?                              @db.VarChar(5)
+  institution_id              String                               @db.Uuid
+  state                       String?                              @default("BA") @db.VarChar(4)
+  city                        String?                              @default("Salvador") @db.VarChar(100)
+  region                      String?                              @default("Nordeste") @db.VarChar(100)
+  url_image                   String?                              @db.VarChar(200)
+  acronym                     String?                              @db.VarChar(100)
+  description                 String?
+  visible                     Boolean?                             @default(false)
+  site                        String?
+  coordinator                 String?                              @db.VarChar(100)
+  email                       String?                              @db.VarChar(100)
+  start                       DateTime?                            @db.Date
+  phone                       String?                              @db.VarChar(20)
+  periodicity                 String?                              @db.VarChar(50)
+  created_at                  DateTime?                            @default(now()) @db.Timestamp(6)
+  updated_at                  DateTime?                            @default(now()) @db.Timestamp(6)
+  institution                 public_institution                   @relation(fields: [institution_id], references: [id], onDelete: Cascade)
+  graduate_program_researcher public_graduate_program_researcher[]
+  graduate_program_student    public_graduate_program_student[] @ignore
+  research_lines_programs     research_lines_programs[]
+
+  @@map("graduate_program")
+  @@schema("public")
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model graduate_program_ind_prod {
+  id                          String   @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  graduate_program_id         String   @db.Uuid
+  year                        Int
+  ind_prod_article            Decimal? @db.Decimal(10, 3)
+  ind_prod_book               Decimal? @db.Decimal(10, 3)
+  ind_prod_book_chapter       Decimal? @db.Decimal(10, 3)
+  ind_prod_software           Decimal? @db.Decimal(10, 3)
+  ind_prod_report             Decimal? @db.Decimal(10, 3)
+  ind_prod_granted_patent     Decimal? @db.Decimal(10, 3)
+  ind_prod_not_granted_patent Decimal? @db.Decimal(10, 3)
+  ind_prod_guidance           Decimal? @db.Decimal(10, 3)
+
+  @@ignore
+  @@schema("public")
+}
+
+model public_graduate_program_researcher {
+  graduate_program_id String                  @db.Uuid
+  researcher_id       String                  @db.Uuid
+  year                Int[]
+  type_               relationship?
+  created_at          DateTime?               @default(now()) @db.Timestamp(6)
+  updated_at          DateTime?               @default(now()) @db.Timestamp(6)
+  graduate_program    public_graduate_program @relation(fields: [graduate_program_id], references: [graduate_program_id], onDelete: Cascade)
+  researcher          public_researcher       @relation(fields: [researcher_id], references: [id], onDelete: Cascade)
+
+  @@id([graduate_program_id, researcher_id])
+  @@map("graduate_program_researcher")
+  @@schema("public")
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model public_graduate_program_student {
+  graduate_program_id String                  @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  researcher_id       String                  @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  year                Int[]
+  created_at          DateTime?               @default(now()) @db.Timestamp(6)
+  updated_at          DateTime?               @default(now()) @db.Timestamp(6)
+  graduate_program    public_graduate_program @relation(fields: [graduate_program_id], references: [graduate_program_id], onDelete: Cascade)
+  researcher          public_researcher       @relation(fields: [researcher_id], references: [id], onDelete: Cascade)
+
+  @@id([graduate_program_id, researcher_id, year])
+  @@map("graduate_program_student")
+  @@ignore
+  @@schema("public")
+}
+
+model great_area_expertise {
+  id                        String                      @id(map: "pk_id_great_area_expertise") @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  name                      String                      @db.VarChar
+  created_at                DateTime                    @default(now()) @db.Timestamp(6)
+  updated_at                DateTime?                   @db.Timestamp(6)
+  deleted_at                DateTime?                   @db.Timestamp(6)
+  area_expertise            area_expertise[]
+  researcher_area_expertise researcher_area_expertise[]
+
+  @@index([name(ops: raw("gin_trgm_ops"))], type: Gin)
+  @@schema("public")
+}
+
+model guidance {
+  id            String             @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  created_at    DateTime           @default(now()) @db.Timestamp(6)
+  researcher_id String?            @db.Uuid
+  title         String?            @db.VarChar(400)
+  nature        String?            @db.VarChar(255)
+  oriented      String?            @db.VarChar(255)
+  type          String?            @db.VarChar(255)
+  status        String?            @db.VarChar(100)
+  year          Int?               @db.SmallInt
+  is_new        Boolean?           @default(true)
+  researcher    public_researcher? @relation(fields: [researcher_id], references: [id], onDelete: Cascade, map: "fk_researcher_id")
+
+  @@schema("public")
+}
+
+model public_institution {
+  id               String                    @id(map: "PK_f60ee4ff0719b7df54830b39087") @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  name             String                    @unique(map: "UQ_d218ad3566afa9e396f184fd7d5") @db.VarChar
+  acronym          String?                   @unique(map: "UQ_c50c675ba2bedbaff7192b0a30e") @db.VarChar(50)
+  description      String?                   @db.VarChar(5000)
+  lattes_id        String?                   @db.Char(12)
+  cnpj             String?                   @unique(map: "UQ_c9af99711dccbeb22b20b24cca8") @db.Char(14)
+  image            String?                   @db.VarChar
+  created_at       DateTime                  @default(now()) @db.Timestamp(6)
+  updated_at       DateTime?                 @db.Timestamp(6)
+  deleted_at       DateTime?                 @db.Timestamp(6)
+  latitude         Float?
+  longitude        Float?
+  graduate_program public_graduate_program[]
+  researcher       public_researcher[]
+
+  @@map("institution")
+  @@schema("public")
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model jcr {
+  rank           String? @db.VarChar
+  journalname    String? @db.VarChar
+  jcryear        String? @db.VarChar
+  abbrjournal    String? @db.VarChar
+  issn           String? @db.VarChar
+  eissn          String? @db.VarChar
+  totalcites     String? @db.VarChar
+  totalarticles  String? @db.VarChar
+  citableitems   String? @db.VarChar
+  citedhalflife  String? @db.VarChar
+  citinghalflife String? @db.VarChar
+  jif2019        Float?
+  url_revista    String? @db.VarChar
+
+  @@ignore
+  @@schema("public")
+}
+
+model openalex_article {
+  id                  String             @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  article_id          String             @id(map: "PK_FIXMEHELP") @db.Uuid
+  article_institution String?            @db.VarChar
+  issn                String?            @db.VarChar
+  authors_institution String?            @db.VarChar
+  abstract            String?
+  authors             String?            @db.VarChar
+  language            String?            @db.VarChar
+  citations_count     Int?               @db.SmallInt
+  pdf                 String?            @db.VarChar
+  landing_page_url    String?            @db.VarChar
+  keywords            String?            @db.VarChar
+  article_abstract    article_abstract[]
+
+  @@schema("public")
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model openalex_researcher {
+  researcher_id   String?            @unique @db.Uuid
+  h_index         Int?
+  relevance_score Float?
+  works_count     Int?
+  cited_by_count  Int?
+  i10_index       Int?
+  scopus          String?            @db.VarChar(255)
+  orcid           String?            @db.VarChar(255)
+  openalex        String?            @db.VarChar(255)
+  researcher      public_researcher? @relation(fields: [researcher_id], references: [id], onDelete: Cascade, map: "fk_researcher_op")
+
+  @@ignore
+  @@schema("public")
+}
+
+model participation_events {
+  id                 String             @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  created_at         DateTime           @default(now()) @db.Timestamp(6)
+  title              String?            @db.VarChar(500)
+  event_name         String?            @db.VarChar(500)
+  nature             String?            @db.VarChar(30)
+  form_participation String?            @db.VarChar(30)
+  type_participation String?            @db.VarChar(30)
+  researcher_id      String?            @db.Uuid
+  year               Int?               @db.SmallInt
+  is_new             Boolean?           @default(true)
+  researcher         public_researcher? @relation(fields: [researcher_id], references: [id], onDelete: Cascade, map: "fk_researcher_id")
+
+  @@schema("public")
+}
+
+model public_patent {
+  id               String              @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  created_at       DateTime            @default(now()) @db.Timestamp(6)
+  title            String?             @db.VarChar(400)
+  category         String?             @db.VarChar(200)
+  relevance        Boolean             @default(false)
+  has_image        Boolean             @default(false)
+  development_year String?             @db.VarChar(10)
+  details          String?             @db.VarChar(2500)
+  researcher_id    String?             @db.Uuid
+  grant_date       DateTime?           @db.Timestamp(6)
+  deposit_date     String?             @db.VarChar(255)
+  is_new           Boolean?            @default(true)
+  patent           embeddings_patent[]
+  researcher       public_researcher?  @relation(fields: [researcher_id], references: [id], onDelete: Cascade, map: "fk_researcher_id")
+
+  @@map("patent")
+  @@schema("public")
+}
+
+model periodical_magazine {
+  id                               String                             @id(map: "PK_35bb0df687d8879d763c1f3ae68") @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  name                             String?                            @db.VarChar(600)
+  issn                             String?                            @db.VarChar(20)
+  qualis                           String?                            @db.VarChar(8)
+  created_at                       DateTime                           @default(now()) @db.Timestamp(6)
+  updated_at                       DateTime?                          @db.Timestamp(6)
+  deleted_at                       DateTime?                          @db.Timestamp(6)
+  jcr                              String?                            @db.VarChar(100)
+  jcr_link                         String?                            @db.VarChar(200)
+  bibliographic_production_article bibliographic_production_article[]
+
+  @@index([name(ops: raw("gin_trgm_ops"))], type: Gin)
+  @@schema("public")
+}
+
+model relevant_production {
+  researcher_id String            @db.Uuid
+  production_id String            @db.Uuid
+  type          String            @db.VarChar
+  has_image     Boolean           @default(false)
+  created_at    DateTime          @default(now()) @db.Timestamp(6)
+  researcher    public_researcher @relation(fields: [researcher_id], references: [id], onDelete: Cascade, map: "fk_researcher")
+
+  @@id([researcher_id, production_id, type])
+  @@schema("public")
+}
+
+model research_dictionary {
+  research_dictionary_id String  @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  term                   String? @db.VarChar(255)
+  frequency              Int?    @default(1)
+  type_                  String? @db.VarChar(30)
+
+  @@unique([term, type_])
+  @@schema("public")
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model research_group {
+  id                  String  @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  name                String? @db.VarChar(200)
+  institution         String? @db.VarChar(200)
+  first_leader        String? @db.VarChar(200)
+  first_leader_id     String? @db.Uuid
+  second_leader       String? @db.VarChar(200)
+  second_leader_id    String? @db.Uuid
+  area                String? @db.VarChar(200)
+  census              Int?
+  start_of_collection String? @db.VarChar(200)
+  end_of_collection   String? @db.VarChar(200)
+  group_identifier    String? @db.VarChar(200)
+  year                Int?
+  institution_name    String? @db.VarChar(200)
+  category            String? @db.VarChar(200)
+
+  @@ignore
+  @@schema("public")
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model research_lines {
+  id                     String  @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  research_group_id      String? @db.Uuid
+  title                  String?
+  objective              String?
+  keyword                String? @db.VarChar(510)
+  group_identifier       String? @db.VarChar(510)
+  year                   Int?
+  predominant_major_area String? @db.VarChar(510)
+  predominant_area       String? @db.VarChar(510)
+
+  @@ignore
+  @@schema("public")
+}
+
+model research_lines_programs {
+  graduate_program_id String                  @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  name                String
+  area                String                  @db.VarChar(255)
+  start_year          Int?
+  end_year            Int?
+  graduate_program    public_graduate_program @relation(fields: [graduate_program_id], references: [graduate_program_id], onDelete: Cascade)
+
+  @@id([graduate_program_id, name])
+  @@schema("public")
+}
+
+model research_project {
+  id                          String                        @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  researcher_id               String                        @db.Uuid
+  start_year                  Int?
+  end_year                    Int?
+  agency_code                 String?                       @db.VarChar(255)
+  agency_name                 String?                       @db.VarChar(255)
+  project_name                String?
+  status                      String?                       @db.VarChar(255)
+  nature                      String?                       @db.VarChar(255)
+  number_undergraduates       Int?                          @default(0)
+  number_specialists          Int?                          @default(0)
+  number_academic_masters     Int?                          @default(0)
+  number_phd                  Int?                          @default(0)
+  description                 String?
+  researcher                  public_researcher             @relation(fields: [researcher_id], references: [id], onDelete: Cascade)
+  research_project_components research_project_components[] @ignore
+  research_project_foment     research_project_foment[] @ignore
+  research_project_production research_project_production[] @ignore
+
+  @@schema("public")
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model research_project_components {
+  project_id       String           @db.Uuid
+  name             String?          @db.VarChar(255)
+  lattes_id        String?          @db.VarChar(255)
+  citations        String?          @db.VarChar
+  research_project research_project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  @@ignore
+  @@schema("public")
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model research_project_foment {
+  project_id       String           @db.Uuid
+  agency_name      String?          @db.VarChar(255)
+  agency_code      String?          @db.VarChar(255)
+  nature           String?          @db.VarChar(255)
+  research_project research_project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  @@ignore
+  @@schema("public")
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model research_project_production {
+  project_id       String           @db.Uuid
+  title            String?
+  type             String?          @db.VarChar(255)
+  research_project research_project @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  @@ignore
+  @@schema("public")
+}
+
+model research_report {
+  id                     String             @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  created_at             DateTime           @default(now()) @db.Timestamp(6)
+  researcher_id          String?            @db.Uuid
+  title                  String?            @db.VarChar(400)
+  project_name           String?            @db.VarChar(255)
+  financing_institutionc String?            @db.VarChar(255)
+  year                   Int?               @db.SmallInt
+  is_new                 Boolean?           @default(true)
+  researcher             public_researcher? @relation(fields: [researcher_id], references: [id], onDelete: Cascade, map: "fk_researcher_id")
+
+  @@schema("public")
+}
+
+model public_researcher {
+  id                                 String                               @id(map: "PK_7b53850398061862ebe70d4ce44") @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  name                               String                               @db.VarChar
+  lattes_id                          String?                              @unique(map: "UQ_fdf2bde0f46501e3e84ec154c32") @db.Char(16)
+  lattes_10_id                       String?                              @unique(map: "UQ_cd7166a27f090d19d4e985592db") @db.Char(10)
+  last_update                        DateTime                             @default(now()) @db.Timestamp(6)
+  citations                          String?                              @db.VarChar
+  orcid                              String?                              @db.Char(31)
+  abstract                           String?                              @db.VarChar(5000)
+  abstract_en                        String?                              @db.VarChar(5000)
+  other_information                  String?                              @db.VarChar(5000)
+  city_id                            String?                              @db.Uuid
+  country_id                         String?                              @db.Uuid
+  classification                     classification_class?                @default(E)
+  has_image                          Boolean                              @default(false)
+  qtt_publications                   Int?
+  institution_id                     String?                              @db.Uuid
+  graduate_program                   String?                              @db.VarChar(255)
+  graduation                         String?                              @db.VarChar(30)
+  update_abstract                    Boolean?                             @default(true)
+  docente                            Boolean                              @default(false)
+  student                            Boolean                              @default(false)
+  extra_field                        String?                              @db.VarChar(255)
+  status                             Boolean                              @default(true)
+  created_at                         DateTime                             @default(now()) @db.Timestamp(6)
+  updated_at                         DateTime?                            @db.Timestamp(6)
+  deleted_at                         DateTime?                            @db.Timestamp(6)
+  abstract_ai                        String?
+  rel_abstract                       abstract[]
+  artistic_production                artistic_production[]
+  bibliographic_production           bibliographic_production[]
+  brand                              brand[]
+  didactic_material                  didactic_material[]
+  education                          education[]
+  event_organization                 event_organization[]
+  foment                             foment[] @ignore
+  graduate_program_researcher        public_graduate_program_researcher[]
+  graduate_program_student           public_graduate_program_student[] @ignore
+  guidance                           guidance[]
+  openalex_researcher                openalex_researcher? @ignore
+  participation_events               participation_events[]
+  patent                             public_patent[]
+  relevant_production                relevant_production[]
+  research_project                   research_project[]
+  research_report                    research_report[]
+  city                               city?                                @relation(fields: [city_id], references: [id], onDelete: Cascade, map: "FKCityResearcher")
+  country                            country?                             @relation(fields: [country_id], references: [id], onDelete: Cascade, map: "FKCountryResearcher")
+  institution                        public_institution?                  @relation(fields: [institution_id], references: [id], onDelete: Cascade, map: "FKInstitutionResearcher")
+  researcher_address                 researcher_address[]
+  researcher_area_expertise          researcher_area_expertise[]
+  researcher_ind_prod                researcher_ind_prod[]
+  researcher_production              researcher_production[]
+  researcher_professional_experience researcher_professional_experience[]
+  tags                               researcher_tags_on_researchers[]
+  software                           software[]
+  technical_work                     technical_work[]
+  technical_work_presentation        technical_work_presentation[]
+  technical_work_program             technical_work_program[]
+  technological_product              technological_product[]
+  departament_researcher             departament_researcher[]
+  researcher                         ufmg_researcher?
+
+  @@index([abstract_en(ops: raw("gin_trgm_ops"))], type: Gin)
+  @@index([abstract(ops: raw("gin_trgm_ops"))], type: Gin)
+  @@index([name(ops: raw("gin_trgm_ops"))], type: Gin)
+  @@map("researcher")
+  @@schema("public")
+}
+
+model researcher_address {
+  id            String            @id(map: "PK_180e58d987170694c2c11424916") @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  researcher_id String            @db.Uuid
+  created_at    DateTime          @default(now()) @db.Timestamp(6)
+  updated_at    DateTime?         @db.Timestamp(6)
+  deleted_at    DateTime?         @db.Timestamp(6)
+  city          String?           @db.VarChar(50)
+  organ         String?           @db.VarChar(255)
+  unity         String?           @db.VarChar(255)
+  institution   String?           @db.VarChar(255)
+  public_place  String?           @db.VarChar(255)
+  district      String?           @db.VarChar(255)
+  cep           String?           @db.VarChar(255)
+  mailbox       String?           @db.VarChar(255)
+  fax           String?           @db.VarChar(20)
+  url_homepage  String?           @db.VarChar(300)
+  telephone     String?           @db.VarChar(20)
+  country       String?           @db.VarChar(100)
+  uf            String?           @db.VarChar(5)
+  researcher    public_researcher @relation(fields: [researcher_id], references: [id], onDelete: Cascade, map: "FKAddressResearcher")
+
+  @@schema("public")
+}
+
+model researcher_area_expertise {
+  id                      String                @id(map: "PK_35338c2e178fa10e7b30966a4fc") @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  researcher_id           String                @db.Uuid
+  sub_area_expertise_id   String                @db.Uuid
+  order                   Int?
+  created_at              DateTime              @default(now()) @db.Timestamp(6)
+  updated_at              DateTime?             @db.Timestamp(6)
+  deleted_at              DateTime?             @db.Timestamp(6)
+  area_expertise_id       String?               @db.Uuid
+  great_area_expertise_id String?               @db.Uuid
+  area_specialty_id       String?               @db.Uuid
+  researcher              public_researcher     @relation(fields: [researcher_id], references: [id], onDelete: Cascade, map: "FKResearcherAreaExpertise")
+  sub_area_expertise      sub_area_expertise    @relation(fields: [sub_area_expertise_id], references: [id], onDelete: Cascade, map: "FKSubAreaExpertise")
+  area_expertise          area_expertise?       @relation(fields: [area_expertise_id], references: [id], onDelete: Cascade, map: "FkAreaExpertise")
+  area_specialty          area_specialty?       @relation(fields: [area_specialty_id], references: [id], onDelete: Cascade, map: "FkAreaSpecialty")
+  great_area_expertise    great_area_expertise? @relation(fields: [great_area_expertise_id], references: [id], onDelete: Cascade, map: "FkGreatAreaExpertise")
+
+  @@schema("public")
+}
+
+model researcher_ind_prod {
+  id                          String            @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  researcher_id               String            @db.Uuid
+  year                        Int
+  ind_prod_article            Decimal?          @db.Decimal(10, 3)
+  ind_prod_book               Decimal?          @db.Decimal(10, 3)
+  ind_prod_book_chapter       Decimal?          @db.Decimal(10, 3)
+  ind_prod_software           Decimal?          @db.Decimal(10, 3)
+  ind_prod_report             Decimal?          @db.Decimal(10, 3)
+  ind_prod_granted_patent     Decimal?          @db.Decimal(10, 3)
+  ind_prod_not_granted_patent Decimal?          @db.Decimal(10, 3)
+  ind_prod_guidance           Decimal?          @db.Decimal(10, 3)
+  researcher                  public_researcher @relation(fields: [researcher_id], references: [id], onDelete: Cascade, map: "FKRIndProd")
+
+  @@id([researcher_id, year], map: "PKRIndProd")
+  @@schema("public")
+}
+
+model researcher_production {
+  researcher_production_id String            @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  researcher_id            String            @db.Uuid
+  articles                 Int?
+  book_chapters            Int?
+  book                     Int?
+  work_in_event            Int?
+  patent                   Int?
+  software                 Int?
+  brand                    Int?
+  great_area               String?
+  great_area_              String[]
+  area_specialty           String?
+  city                     String?           @db.VarChar(100)
+  organ                    String?           @db.VarChar(100)
+  researcher               public_researcher @relation(fields: [researcher_id], references: [id], onDelete: Cascade)
+
+  @@schema("public")
+}
+
+model researcher_professional_experience {
+  id                              String            @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  researcher_id                   String            @db.Uuid
+  enterprise                      String?           @db.VarChar(255)
+  start_year                      Int?
+  end_year                        Int?
+  employment_type                 String?           @db.VarChar(255)
+  other_employment_type           String?           @db.VarChar(255)
+  functional_classification       String?           @db.VarChar(255)
+  other_functional_classification String?           @db.VarChar(255)
+  workload_hours_weekly           String?           @db.VarChar(255)
+  exclusive_dedication            Boolean?
+  additional_info                 String?
+  researcher                      public_researcher @relation(fields: [researcher_id], references: [id], onDelete: Cascade)
+
+  @@schema("public")
+}
+
+model software {
+  id                     String             @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  created_at             DateTime           @default(now()) @db.Timestamp(6)
+  title                  String?            @db.VarChar
+  platform               String?            @db.VarChar
+  goal                   String?            @db.VarChar
+  relevance              Boolean            @default(false)
+  has_image              Boolean            @default(false)
+  environment            String?            @db.VarChar
+  availability           String?            @db.VarChar
+  financing_institutionc String?            @db.VarChar
+  researcher_id          String?            @db.Uuid
+  year                   Int?               @db.SmallInt
+  is_new                 Boolean?           @default(true)
+  researcher             public_researcher? @relation(fields: [researcher_id], references: [id], onDelete: Cascade, map: "fk_researcher_id")
+
+  @@index([title(ops: raw("gin_trgm_ops"))], type: Gin)
+  @@schema("public")
+}
+
+model state {
+  id           String    @id(map: "PK_549ffd046ebab1336c3a8030a12") @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  name         String    @unique(map: "UQ_b2c4aef5929860729007ac32f6f") @db.VarChar
+  abbreviation String?   @unique(map: "UQ_a4925b2350673eb963998d27ec3") @db.Char(2)
+  country_id   String    @db.Uuid
+  created_at   DateTime  @default(now()) @db.Timestamp(6)
+  updated_at   DateTime? @db.Timestamp(6)
+  deleted_at   DateTime? @db.Timestamp(6)
+  city         city[]
+  country      country   @relation(fields: [country_id], references: [id], onDelete: Cascade, map: "FKCountryState")
+
+  @@schema("public")
+}
+
+model sub_area_expertise {
+  id                        String                      @id(map: "pk_id_sub_area_expertise") @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  name                      String                      @db.VarChar
+  area_expertise_id         String                      @db.Uuid
+  created_at                DateTime                    @default(now()) @db.Timestamp(6)
+  updated_at                DateTime?                   @db.Timestamp(6)
+  deleted_at                DateTime?                   @db.Timestamp(6)
+  area_specialty            area_specialty[]
+  researcher_area_expertise researcher_area_expertise[]
+  area_expertise            area_expertise              @relation(fields: [area_expertise_id], references: [id], onDelete: Cascade)
+
+  @@schema("public")
+}
+
+model technical_work {
+  id                  String            @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  researcher_id       String            @db.Uuid
+  country             String?           @db.VarChar
+  title               String
+  nature              String?           @db.VarChar
+  funding_institution String?           @db.VarChar
+  duration            Int?
+  year                Int?
+  researcher          public_researcher @relation(fields: [researcher_id], references: [id], onDelete: Cascade, map: "fk_researcher")
+
+  @@schema("public")
+}
+
+model technical_work_presentation {
+  id                    String            @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  researcher_id         String            @db.Uuid
+  country               String?           @db.VarChar
+  title                 String
+  nature                String?           @db.VarChar
+  year                  Int?
+  event_name            String?           @db.VarChar
+  promoting_institution String?           @db.VarChar
+  researcher            public_researcher @relation(fields: [researcher_id], references: [id], onDelete: Cascade, map: "fk_researcher")
+
+  @@schema("public")
+}
+
+model technical_work_program {
+  id            String            @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  researcher_id String            @db.Uuid
+  country       String?           @db.VarChar
+  title         String
+  nature        String?           @db.VarChar
+  year          Int?
+  theme         String?           @db.VarChar
+  researcher    public_researcher @relation(fields: [researcher_id], references: [id], onDelete: Cascade, map: "fk_researcher")
+
+  @@schema("public")
+}
+
+model technological_product {
+  id            String            @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  researcher_id String            @db.Uuid
+  country       String?           @db.VarChar
+  title         String
+  nature        String?           @db.VarChar
+  type          String?           @db.VarChar
+  year          Int?
+  researcher    public_researcher @relation(fields: [researcher_id], references: [id], onDelete: Cascade, map: "fk_researcher")
+
+  @@schema("public")
+}
+
+model departament {
+  dep_id                 String                   @id @db.VarChar(255)
+  org_cod                String?                  @db.VarChar(255)
+  dep_nom                String?                  @db.VarChar(255)
+  dep_des                String?
+  dep_email              String?                  @db.VarChar(255)
+  dep_site               String?
+  dep_sigla              String?                  @db.VarChar(255)
+  dep_tel                String?                  @db.VarChar(255)
+  img_data               Bytes?
+  departament_researcher departament_researcher[]
+  departament_technician departament_technician[]
+
+  @@schema("ufmg")
+}
+
+model departament_researcher {
+  dep_id        String            @db.VarChar(20)
+  researcher_id String            @db.Uuid
+  departament   departament       @relation(fields: [dep_id], references: [dep_id], onDelete: Cascade)
+  researcher    public_researcher @relation(fields: [researcher_id], references: [id], onDelete: Cascade)
+
+  @@id([dep_id, researcher_id])
+  @@schema("ufmg")
+}
+
+model departament_technician {
+  dep_id        String          @db.VarChar(255)
+  technician_id String          @db.Uuid
+  departament   departament     @relation(fields: [dep_id], references: [dep_id], onDelete: Cascade)
+  technician    ufmg_technician @relation(fields: [technician_id], references: [technician_id], onDelete: Cascade)
+
+  @@id([dep_id, technician_id])
+  @@schema("ufmg")
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model mandate {
+  member      String? @db.VarChar(255)
+  departament String? @db.VarChar(255)
+  mandate     String? @db.VarChar(255)
+  email       String? @db.VarChar(255)
+  phone       String? @db.VarChar(255)
+
+  @@ignore
+  @@schema("ufmg")
+}
+
+model ufmg_researcher {
+  researcher_id                 String            @id @db.Uuid
+  full_name                     String?           @db.VarChar(255)
+  gender                        String?           @db.VarChar(255)
+  status_code                   String?           @db.VarChar(255)
+  work_regime                   String?           @db.VarChar(255)
+  job_class                     String?           @db.Char(1)
+  job_title                     String?           @db.VarChar(255)
+  job_rank                      String?           @db.VarChar(255)
+  job_reference_code            String?           @db.VarChar(255)
+  academic_degree               String?           @db.VarChar(255)
+  organization_entry_date       DateTime?         @db.Date
+  last_promotion_date           DateTime?         @db.Date
+  employment_status_description String?           @db.VarChar(255)
+  department_name               String?           @db.VarChar(255)
+  career_category               String?           @db.VarChar(255)
+  academic_unit                 String?           @db.VarChar(255)
+  unit_code                     String?           @db.VarChar(255)
+  function_code                 String?           @db.VarChar(255)
+  position_code                 String?           @db.VarChar(255)
+  leadership_start_date         DateTime?         @db.Date
+  leadership_end_date           DateTime?         @db.Date
+  current_function_name         String?           @db.VarChar(255)
+  function_location             String?           @db.VarChar(255)
+  registration_number           String?           @db.VarChar(200)
+  ufmg_registration_number      String?           @db.VarChar(200)
+  semester_reference            String?           @db.VarChar(6)
+  researcher                    public_researcher @relation(fields: [researcher_id], references: [id], onDelete: Cascade)
+
+  @@map("researcher")
+  @@schema("ufmg")
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model researcher_data {
+  nome            String?   @db.VarChar(255)
+  cpf             String?   @db.VarChar(14)
+  classe          Int?
+  nivel           Int?
+  inicio          DateTime? @db.Timestamp(6)
+  fim             DateTime? @db.Timestamp(6)
+  tempo_nivel     Int?
+  tempo_acumulado Int?
+  arquivo         String?   @db.VarChar(255)
+
+  @@ignore
+  @@schema("ufmg")
+}
+
+model ufmg_technician {
+  technician_id                 String                   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  full_name                     String?                  @db.VarChar(255)
+  gender                        String?                  @db.VarChar(255)
+  status_code                   String?                  @db.VarChar(255)
+  work_regime                   String?                  @db.VarChar(255)
+  job_class                     String?                  @db.Char(1)
+  job_title                     String?                  @db.VarChar(255)
+  job_rank                      String?                  @db.VarChar(255)
+  job_reference_code            String?                  @db.VarChar(255)
+  academic_degree               String?                  @db.VarChar(255)
+  organization_entry_date       DateTime?                @db.Date
+  last_promotion_date           DateTime?                @db.Date
+  employment_status_description String?                  @db.VarChar(255)
+  department_name               String?                  @db.VarChar(255)
+  career_category               String?                  @db.VarChar(255)
+  academic_unit                 String?                  @db.VarChar(255)
+  unit_code                     String?                  @db.VarChar(255)
+  function_code                 String?                  @db.VarChar(255)
+  position_code                 String?                  @db.VarChar(255)
+  leadership_start_date         DateTime?                @db.Date
+  leadership_end_date           DateTime?                @db.Date
+  current_function_name         String?                  @db.VarChar(255)
+  function_location             String?                  @db.VarChar(255)
+  registration_number           String?                  @db.VarChar(255)
+  ufmg_registration_number      String?                  @db.VarChar(255)
+  semester_reference            String?                  @db.VarChar(6)
+  departament_technician        departament_technician[]
+
+  @@map("technician")
+  @@schema("ufmg")
+}
+
+model researcher_tags {
+  id            String                           @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  created_at    DateTime                         @default(now()) @db.Timestamp(6)
+  name          String?                          @db.VarChar(100)
+  search_vector Unsupported("tsvector")?         @default(dbgenerated("setweight(to_tsvector('portuguese'::regconfig, (COALESCE(name, ''::character varying))::text), 'A'::\"char\")"))
+  researchers   researcher_tags_on_researchers[]
+
+  @@index([name(ops: raw("gin_trgm_ops"))], type: Gin)
+  @@index([search_vector], map: "researcher_tags_search_idx", type: Gin)
+  @@map("researcher_tags")
+  @@schema("public")
+}
+
+model researcher_tags_on_researchers {
+  researcher_id String            @db.Uuid
+  tag_id        String            @db.Uuid
+  assigned_at   DateTime          @default(now()) @db.Timestamp(6)
+  researcher    public_researcher @relation(fields: [researcher_id], references: [id], onDelete: Cascade)
+  tag           researcher_tags   @relation(fields: [tag_id], references: [id], onDelete: Cascade)
+
+  @@id([researcher_id, tag_id])
+  @@schema("public")
+}
+
+enum bibliographic_production_type_enum {
+  BOOK
+  BOOK_CHAPTER
+  ARTICLE
+  WORK_IN_EVENT
+  TEXT_IN_NEWSPAPER_MAGAZINE
+
+  @@schema("public")
+}
+
+enum classification_class {
+  A_ @map("A+")
+  A
+  B_ @map("B+")
+  B
+  C_ @map("C+")
+  C
+  D_ @map("D+")
+  D
+  E_ @map("E+")
+  E
+
+  @@schema("public")
+}
+
+enum relationship {
+  COLABORADOR
+  PERMANENTE
+
+  @@schema("public")
+}
+
+enum routine_type {
+  SOAP_LATTES
+  HOP
+  POPULATION
+  PRODUCTION
+  LATTES_10
+  IND_PROD
+  POG
+  OPEN_ALEX
+  SEARCH_TERM
+
+  @@schema("public")
+}

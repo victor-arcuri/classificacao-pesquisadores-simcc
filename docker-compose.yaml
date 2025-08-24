@@ -8,11 +8,15 @@ services:
       POSTGRES_PASSWORD: ${DB_SENHA}
     volumes:
       - pgdata:/var/lib/postgresql/data
+      - ./database/init_scripts:/docker-entrypoint-initdb.d
     ports: 
       - "${DB_PORT_HOST}:${DB_PORT_CONTAINER}"
     container_name: ${NOME_CONTAINER_DB}
 
   front-end:
+    depends_on: 
+      api:
+        condition: service_started
     build:
       context: ./classificacao-front
       dockerfile: front.dockerfile
@@ -23,6 +27,26 @@ services:
     volumes:
       - ./classificacao-front:/app
       - /app/node_modules
+    command: npm run dev
+
+  api:
+    depends_on: 
+      database:
+        condition: service_started
+    build: 
+      context: ./api
+      dockerfile: api.dockerfile
+    image: ${NOME_IMAGEM_API}
+    container_name: ${NOME_CONTAINER_API}
+    ports:
+      - "${PORT_HOST_API}:${PORT_CONTAINER_API}"
+    volumes:
+      - ./api:/app
+      - /app/node_modules
+    environment:
+      FRONT_URL: "http://localhost:${PORT_HOST_FRONT}"
+      API_PORT: ${PORT_CONTAINER_API}
+      DATABASE_URL: "postgresql://${DB_USERNAME}:${DB_SENHA}@database:${DB_PORT_CONTAINER}/${DB_NAME}"
     command: npm run dev
 
 volumes:
