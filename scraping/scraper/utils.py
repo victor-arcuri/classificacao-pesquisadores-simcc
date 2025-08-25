@@ -5,7 +5,6 @@ def salvar_em_json(dados, nome_do_arquivo="dados.json"):
     """
     Salva um dicionário em um arquivo JSON dentro da pasta 'data'.
     """
-    # Garante que o caminho para o arquivo inclua a pasta 'data'
     caminho_da_pasta = '../data'
     if not os.path.exists(caminho_da_pasta):
         os.makedirs(caminho_da_pasta)
