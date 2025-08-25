@@ -1,5 +1,6 @@
 from scraper.driver_config import configurar_chrome_driver
 from scraper.core_scraper import raspar_dados_pesquisador
+from scraper.utils import salvar_em_json
 
 # Coloque aqui url da página do pesquisador desejado
 URL_PESQUISADOR = "https://simcc.uesc.br/researcher?researcher_name=Eduardo%20Manuel%20de%20Freitas%20Jorge&search_type=name&terms="
@@ -45,6 +46,7 @@ def main():
         if driver:
             dados_extraidos = raspar_dados_pesquisador(driver, URL_PESQUISADOR)
             exibir_resultados(dados_extraidos)
+            salvar_em_json(dados_extraidos)
 
     except Exception as e:
         print(f"\n--- ERRO INESPERADO NA EXECUÇÃO PRINCIPAL ---")
