@@ -42,12 +42,11 @@ services:
       - "${PORT_HOST_API}:${PORT_CONTAINER_API}"
     volumes:
       - ./api:/app
-      - /app/node_modules
     environment:
       FRONT_URL: "http://localhost:${PORT_HOST_FRONT}"
       API_PORT: ${PORT_CONTAINER_API}
       DATABASE_URL: "postgresql://${DB_USERNAME}:${DB_SENHA}@database:${DB_PORT_CONTAINER}/${DB_NAME}"
-    command: npm run dev
+    command: sh -c "npx prisma generate && npm run dev"
 
 volumes:
   pgdata:

@@ -10,7 +10,7 @@ export const app: Express = express();
 
 const options: CorsOptions = {
     credentials: true,
-    origin: process.env.FRONT_URL
+    origin: '*'
 };
 
 app.use(cors(options));
@@ -21,4 +21,4 @@ app.use(
     }),
 );
 
-app.use('/search', searchRouter);
+app.use('/api/search', searchRouter);

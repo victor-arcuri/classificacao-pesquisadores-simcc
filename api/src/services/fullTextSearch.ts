@@ -19,7 +19,6 @@ export async function searchTag(query: string, minTsRank: number = 0.01, minTrgm
     FROM
       "public"."researcher_tags"
     WHERE
-      -- Filtra resultados que atendem a um dos critérios
       ts_rank("search_vector", to_tsquery('portuguese_unaccent', $1)) > $3 OR
       similarity(LOWER(unaccent("name")), LOWER(unaccent($2))) > $4
     ORDER BY
