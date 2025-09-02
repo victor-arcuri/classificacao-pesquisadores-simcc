@@ -1,18 +1,22 @@
 from langgraph.graph import StateGraph, START, END
-from langchain_openai import ChatOpenAI
-from langchain_community.vectorstores.pgvector import PGVector
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+from typing import TypedDict, List, Dict, Any
 
 import numpy as np
 import psycopg
 import dotenv
 import getpass
 import os
+import ast 
 
 class State(TypedDict):
     """Estado passado para cada etapa do Grafo."""
-    all_tags_data: Dict[str, List[Dict[str, any]]]
+
+    all_tags_data: Dict[str, List[Dict[str, Any]]]
+    tag_groups: Dict[str, List[Dict[str, Any]]]
 
 class Environment:
+
     """Classe para carregar variáveis de ambiente de forma segura."""
     @staticmethod
     def load_llm_api_keys():
@@ -24,44 +28,44 @@ class Environment:
         if not os.environ.get("DB_URL"):
             os.environ["DB_URL"] = getpass.getpass("Enter the Database connection URL: ")
 
+    @staticmethod
+    def set_similarity_threshold():
+        if not os.environ.get("SIMILARITY_THRESHOLD"):
+            os.environ["SIMILARITY_THRESHOLD"] = getpass.getpass("Enter the Similarity Threshold value: ")
+
+
 class TagCleanerAgent:
     """
     Agente que lê, processa e gera uma query de inserção para tags otimizadas.
     """
-    def __init__(self, db_url: str, collection_name: str):
+
+    def __init__(self, db_url: str):
 
         self.llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 
-        self.embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
-        
-        self.collection_name = collection_name
-
-        self.vector_store = PGVector(
-            connection_string=db_url,
-            embedding_function=embeddings,
-            collection_name=collection_name,
-        )
-
-        print(f"Conectado à Vector Store '{collection_name}' com sucesso.")
+        embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
         
 
-    def get_all_tags_from_db(self, state: State) -> Dict[str, List[Dict[str, any]]] :
+        self.db_url = db_url
+
+        self.embeddings = embeddings
+        
+    def get_all_tags_from_db(self, state: State) -> Dict[str, List[Dict[str, Any]]] :
         """Busca todas as tags e seus embeddings no banco de dados."""
+
         all_tags = []
-        with psycopg.connect(self.vector_store.connection_string) as connection:
+        with psycopg.connect(self.db_url) as connection:
             with connection.cursor() as cursor:
-                cursor.execute(f"SELECT uuid FROM langchain_pg_collection WHERE name = '{self.collection_name}'")
-                collection_id_result = cursor.fetchone()
-                if not collection_id_result:
-                    raise ValueError(f"Coleção '{self.collection_name}' não encontrada.")
-                collection_id = collection_id_result[0]
-                cursor.execute(f"SELECT document FROM langchain_pg_embedding WHERE collection_id = '{collection_id}'")
+                cursor.execute('SELECT id, name, embedding FROM "public"."researcher_tags"')
                 for row in cursor.fetchall():
-                    all_tags.append({
-                        "id": row[0],
-                        "name": row[1],
-                        "embedding": np.array(row[2]),
-                    })
+                    if row[2] is not None:
+                        all_tags.append({
+                            "id": row[0],
+                            "name": row[1],
+                            "embedding": np.array(ast.literal_eval(row[2]), dtype=np.float32),
+                        })
+                    else:
+                        print(f"Aviso: Tag '{row[1]}' (ID: {row[0]}) foi ignorada por não possuir embedding.")
         print(f"Encontradas {len(all_tags)} tags para processamento.")
         return {"all_tags_data": all_tags}
         
@@ -71,9 +75,46 @@ class TagCleanerAgent:
         return {"all_tags": all_names}
 
 
-    def clean_and_group_tags(self, state: State):
-        """Agrupa tags similares e escolhe um nome canônico para cada grupo."""
-        all_tags = state["all_tags"]
+    def clean_and_group_tags(self, state: State) -> Dict[str, List[Dict[str, Any]]]:
+        """Agrupa tags similares"""
+
+        SIMILARITY_THRESHOLD = float(os.environ["SIMILARITY_THRESHOLD"]);
+
+        all_tags = state["all_tags_data"]
+        groups = []
+        processed_tags = set()
+        for i in range(len(all_tags)):
+            tag_a = all_tags[i]
+            if (tag_a["id"] in processed_tags):
+                continue
+
+            current_group = {
+                "name":"",
+                "tags": []
+            }
+            current_group["tags"].append(tag_a)
+
+            processed_tags.add(tag_a["id"])
+            for j in range(i+1, len(all_tags)):
+                tag_b = all_tags[j]
+                if (tag_b["id"]  in processed_tags):
+                    continue
+
+                similarity = np.dot(tag_a["embedding"], tag_b["embedding"]) / (np.linalg.norm(tag_a["embedding"]) * np.linalg.norm(tag_b["embedding"]))
+                distance = 1 - similarity
+
+                if (similarity  >= SIMILARITY_THRESHOLD):
+                    current_group["tags"].append(tag_b)
+                    processed_tags.add(tag_b["id"])
+
+            if (len(current_group["tags"]) > 1):
+                groups.append(current_group)
+
+        return {"tag_groups": groups}
+
+    def define_group_names(self, state: State):
+        """Escolhe um nome para cada grupo de tags."""
+
 
     def generate_embeddings_for_groups(self, state: State):
         """Gera os embeddings para os grupos de tags criados"""
@@ -88,13 +129,15 @@ class TagCleanerAgent:
         graph_builder = StateGraph(State)
 
         graph_builder.add_node("get_tags", self.get_all_tags_from_db)
-        graph_builder.add_node("clean_tags", self.clean_and_cluster_tags)
+        graph_builder.add_node("clean_tags", self.clean_and_group_tags)
+        graph_builder.add_node("define_group_names", self.define_group_names)
         graph_builder.add_node("generate_embeddings", self.generate_embeddings_for_groups)
         graph_builder.add_node("generate_query", self.generate_final_query)
 
         graph_builder.set_entry_point("get_tags")
         graph_builder.add_edge("get_tags", "clean_tags")
-        graph_builder.add_edge("clean_tags", "generate_embeddings")
+        graph_builder.add_edge("clean_tags", "define_group_names")
+        graph_builder.add_edge("define_group_names", "generate_embeddings")
         graph_builder.add_edge("generate_embeddings", "generate_query")
         graph_builder.add_edge("generate_query", END)
 
@@ -102,9 +145,9 @@ class TagCleanerAgent:
 
 def main():
     db_url = os.environ["DB_URL"]
-    collection_name="researcher_tags"
-    agent = TagCleanerAgent(db_url, collection_name)
+    agent = TagCleanerAgent(db_url)
     graph = agent.create_graph()
+    final_state = graph.invoke({})
 
 if __name__ == "__main__":
     dotenv.load_dotenv()
