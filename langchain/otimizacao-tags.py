@@ -90,6 +90,7 @@ class TagCleanerAgent:
 
             current_group = {
                 "name":"",
+                "embedding":"",
                 "tags": []
             }
             current_group["tags"].append(tag_a)
@@ -126,7 +127,7 @@ class TagCleanerAgent:
                 1.  Primeiro, analise a seguinte lista de tags no formato (nome da tag, id): {tags}
                 2.  Remova qualquer tag que seja um outlier ou que não se encaixe perfeitamente com o tema central do grupo.
                 3.  A partir da lista de tags refinada, escolha o nome mais claro, comum e representativo para servir como substitutivo para cada tag 
-                individualmente do grupo. O nome não deve ser longo.
+                individualmente do grupo. O nome não deve ser longo e não muito abrangente nem genérico.
             """
             response = self.structured_llm.invoke(prompt)
             tag_group["name"] = response.group_name;
@@ -136,13 +137,13 @@ class TagCleanerAgent:
 
         return {"tag_groups": groups}
         
-
-        
-
-
     def generate_embeddings_for_groups(self, state: State):
         """Gera os embeddings para os grupos de tags criados"""
-
+        groups = state["tag_groups"]
+        for tag_group in groups:
+            tag_group["embedding"] = self.embeddings.embed_query(tag_group["name"])
+        
+        return {"tag_groups": groups}
     
     def generate_final_query(self, state: State):
         """Gera a query de INSERT final a partir dos nomes limpos."""
