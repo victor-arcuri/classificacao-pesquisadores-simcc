@@ -1,0 +1,78 @@
+WITH AggregatedArticles AS (
+    SELECT
+        bp.researcher_id,
+        STRING_AGG(DISTINCT bp.title, '; ') AS aggregated_articles
+    FROM
+        bibliographic_production bp
+    JOIN
+        bibliographic_production_article bpa ON bp.id = bpa.bibliographic_production_id
+    GROUP BY
+        bp.researcher_id
+),
+AggregatedPatents AS (
+    SELECT
+        researcher_id,
+        STRING_AGG(DISTINCT title, '; ') AS aggregated_patents
+    FROM
+        patent
+    GROUP BY
+        researcher_id
+),
+AggregatedProjects AS (
+    SELECT
+        researcher_id,
+        STRING_AGG(DISTINCT project_name, '; ') AS aggregated_projects,
+        STRING_AGG(DISTINCT description, '; ') AS aggregated_descriptions
+    FROM
+        research_project
+    GROUP BY
+        researcher_id
+),
+AggregatedBookChapters AS (
+    SELECT
+        bp.researcher_id,
+        STRING_AGG(DISTINCT bp.title, '; ') AS aggregated_book_chapters
+    FROM
+        bibliographic_production bp
+    JOIN
+        bibliographic_production_book_chapter bpc ON bp.id = bpc.bibliographic_production_id
+    GROUP BY
+        bp.researcher_id
+),
+AggregatedEvents AS (
+    SELECT
+        bp.researcher_id,
+        STRING_AGG(DISTINCT bpe.event_name, '; ') AS aggregated_events
+    FROM
+        bibliographic_production bp
+    JOIN
+        bibliographic_production_work_in_event bpe ON bp.id = bpe.bibliographic_production_id
+    GROUP BY
+        bp.researcher_id
+)
+SELECT
+    r.name AS researcher_name,
+    r.id AS researcher_id,
+    COALESCE(r.abstract_ai, 'Sem registro') AS abstract,
+    COALESCE(aa.aggregated_articles, 'Sem registro') AS articles,
+    COALESCE(aproj.aggregated_projects, 'Sem registro') AS project_name,
+    COALESCE(aproj.aggregated_descriptions, 'Sem registro') AS description_project,
+    COALESCE(rp.great_area, 'Sem registro') AS great_area,
+    COALESCE(rp.area_specialty, 'Sem registro') AS area_speciality,
+    COALESCE(ap.aggregated_patents, 'Sem registro') AS patent,
+    COALESCE(abc.aggregated_book_chapters, 'Sem registro') AS book_chapter,
+    COALESCE(ae.aggregated_events, 'Sem registro') AS event_name
+FROM
+    researcher r
+LEFT JOIN
+    researcher_production rp ON r.id = rp.researcher_id
+LEFT JOIN
+    AggregatedArticles aa ON r.id = aa.researcher_id
+LEFT JOIN
+    AggregatedPatents ap ON r.id = ap.researcher_id
+LEFT JOIN
+    AggregatedProjects aproj ON r.id = aproj.researcher_id
+LEFT JOIN
+    AggregatedBookChapters abc ON r.id = abc.researcher_id
+LEFT JOIN
+    AggregatedEvents ae ON r.id = ae.researcher_id
