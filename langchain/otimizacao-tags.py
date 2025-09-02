@@ -1,6 +1,7 @@
 from langgraph.graph import StateGraph, START, END
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from typing import TypedDict, List, Dict, Any
+from pydantic import BaseModel, Field
 
 import numpy as np
 import psycopg
@@ -8,6 +9,10 @@ import dotenv
 import getpass
 import os
 import ast 
+
+class RefinedGroup(BaseModel):
+    group_name: str = Field(description="O nome único que melhor representa o grupo de tags próximas")
+    removed_tags: List[str] = Field(description="Uma lista com o ID de cada tag removida do grupo por não pertencer a ele")
 
 class State(TypedDict):
     """Estado passado para cada etapa do Grafo."""
@@ -42,6 +47,7 @@ class TagCleanerAgent:
     def __init__(self, db_url: str):
 
         self.llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+        self.structured_llm = self.llm.with_structured_output(RefinedGroup)
 
         embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
         
@@ -68,12 +74,6 @@ class TagCleanerAgent:
                         print(f"Aviso: Tag '{row[1]}' (ID: {row[0]}) foi ignorada por não possuir embedding.")
         print(f"Encontradas {len(all_tags)} tags para processamento.")
         return {"all_tags_data": all_tags}
-        
-
-        
-        print(f"Encontradas {len(all_names)} tags.")
-        return {"all_tags": all_names}
-
 
     def clean_and_group_tags(self, state: State) -> Dict[str, List[Dict[str, Any]]]:
         """Agrupa tags similares"""
@@ -113,7 +113,31 @@ class TagCleanerAgent:
         return {"tag_groups": groups}
 
     def define_group_names(self, state: State):
-        """Escolhe um nome para cada grupo de tags."""
+        """Remove tags estrangeiras e escolhe um nome para cada grupo de tags."""
+
+        groups = state["tag_groups"]
+
+        for tag_group in groups:
+            tags = [(tag["name"], tag["id"]) for tag in tag_group["tags"]]
+            prompt = f"""
+                Você é um especialista em curadoria de dados. Sua tarefa é analisar um grupo de tags que representam áreas de estudo de pesquisadores, 
+                as quais foram agrupadas por similaridade matemática, e refinar este grupo.
+
+                1.  Primeiro, analise a seguinte lista de tags no formato (nome da tag, id): {tags}
+                2.  Remova qualquer tag que seja um outlier ou que não se encaixe perfeitamente com o tema central do grupo.
+                3.  A partir da lista de tags refinada, escolha o nome mais claro, comum e representativo para servir como substitutivo para cada tag 
+                individualmente do grupo. O nome não deve ser longo.
+            """
+            response = self.structured_llm.invoke(prompt)
+            tag_group["name"] = response.group_name;
+            for tag in tag_group["tags"]:
+                if (tag["id"] in response.removed_tags):
+                    tag_group.remove(tag)
+
+        return {"tag_groups": groups}
+        
+
+        
 
 
     def generate_embeddings_for_groups(self, state: State):
