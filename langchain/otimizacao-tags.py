@@ -17,8 +17,8 @@ class RefinedGroup(BaseModel):
 class State(TypedDict):
     """Estado passado para cada etapa do Grafo."""
 
-    all_tags_data: Dict[str, List[Dict[str, Any]]]
-    tag_groups: Dict[str, List[Dict[str, Any]]]
+    all_tags_data: List[Dict[str, Any]]
+    tag_groups: List[Dict[str, Any]]
 
 class Environment:
 
@@ -131,22 +131,32 @@ class TagCleanerAgent:
             """
             response = self.structured_llm.invoke(prompt)
             tag_group["name"] = response.group_name;
-            for tag in tag_group["tags"]:
-                if (tag["id"] in response.removed_tags):
-                    tag_group.remove(tag)
+            tag_group["tags"] = [tag for tag in tag_group["tags"] if tag["id"] not in response.removed_tags]
 
         return {"tag_groups": groups}
         
     def generate_embeddings_for_groups(self, state: State):
         """Gera os embeddings para os grupos de tags criados"""
         groups = state["tag_groups"]
-        for tag_group in groups:
-            tag_group["embedding"] = self.embeddings.embed_query(tag_group["name"])
+        group_names = [group["name"] for group in groups]
+        group_embeddings = self.embeddings.embed_documents(group_names)
+        for i, group in enumerate(groups):
+            group['embedding'] = str(group_embeddings[i])
         
         return {"tag_groups": groups}
     
-    def generate_final_query(self, state: State):
-        """Gera a query de INSERT final a partir dos nomes limpos."""
+    def remove_and_create_tags(self, state: State):
+        """Remove as tags dos grupos, substituindo-as pela tag unificada de seu grupo"""
+        
+        groups = state["tag_groups"]
+        with psycopg.connect(self.db_url) as connection:
+            with connection.cursor() as cursor:
+                for tag_group in groups:
+                    tag_ids = tuple([tag["id"] for tag in tag_group["tags"]])
+                    cursor.execute('INSERT INTO "public"."researcher_tags" (name, embedding) VALUES (%s, %s)', (tag_group["name"], tag_group["embedding"]))
+                    placeholders = ', '.join(['%s'] * len(tag_ids))
+                    cursor.execute(f'DELETE FROM "public"."researcher_tags" WHERE id IN ({placeholders})', tag_ids)
+        
 
     def create_graph(self):
         """Cria o grafo LangGraph com o fluxo de otimização."""
@@ -157,14 +167,14 @@ class TagCleanerAgent:
         graph_builder.add_node("clean_tags", self.clean_and_group_tags)
         graph_builder.add_node("define_group_names", self.define_group_names)
         graph_builder.add_node("generate_embeddings", self.generate_embeddings_for_groups)
-        graph_builder.add_node("generate_query", self.generate_final_query)
+        graph_builder.add_node("remove_and_create_tags", self.remove_and_create_tags)
 
         graph_builder.set_entry_point("get_tags")
         graph_builder.add_edge("get_tags", "clean_tags")
         graph_builder.add_edge("clean_tags", "define_group_names")
         graph_builder.add_edge("define_group_names", "generate_embeddings")
-        graph_builder.add_edge("generate_embeddings", "generate_query")
-        graph_builder.add_edge("generate_query", END)
+        graph_builder.add_edge("generate_embeddings", "remove_and_create_tags")
+        graph_builder.add_edge("remove_and_create_tags", END)
 
         return graph_builder.compile()
 
@@ -178,4 +188,5 @@ if __name__ == "__main__":
     dotenv.load_dotenv()
     Environment.load_llm_api_keys()
     Environment.load_db_url()
+    Environment.set_similarity_threshold() 
     main()
