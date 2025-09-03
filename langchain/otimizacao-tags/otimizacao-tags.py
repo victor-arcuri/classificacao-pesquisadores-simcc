@@ -14,31 +14,38 @@ import json
 from datetime import datetime
 
 class LogTag(BaseModel):
+    """Interface base das tags do log"""
     id: str
     name: str
 
 class LogGroupedTag(LogTag):
+    """Interface das tags dos grupos do log"""
     removed: bool
 
 class LogTagGroup(BaseModel):
+    """Interface dos grupos do log"""
     name: str
     embedding: str
     created: bool
     tags: List[LogGroupedTag]
 
 class LogSchema(BaseModel):
+    """Interface do log"""
     groups: List[LogTagGroup] = []
 
 class Log:
+    """Representa os logs salvos no diretório de logs e suas funções"""
     def __init__(self, path=None, groups=[]):
         self.path = path
         self.groups = groups
 
     def set_groups(self, groups: List[LogTagGroup]):
+        """Define os grupos do log"""
         self.groups = groups;
         return self;
     
     def save_log(self):
+        """Atualiza os valores do log salvando em seu arquivo"""
         groups = self.groups
         formatted_groups = []
         for group in groups:
@@ -63,6 +70,7 @@ class Log:
             f.write(json_string)
         
 class RefinedGroup(BaseModel):
+    """Representa a estrutura do output da classificação da LLM"""
     group_name: str = Field(description="O nome único que melhor representa o grupo de tags próximas")
     removed_tags: List[str] = Field(description="Uma lista com o ID de cada tag removida do grupo por não pertencer a ele")
 
@@ -74,6 +82,7 @@ class State(TypedDict):
 
 
 class LogAgent():
+    """Agente que regula a criação e manipulação de logs"""
     def __init__(self, logsPath=None):
         if (logsPath==None):
             logsPath = Path.cwd().joinpath("logs")
@@ -84,9 +93,11 @@ class LogAgent():
 
     @staticmethod
     def _current_timestamp():
+        """Retoma o timestamp atual formatado"""
         return datetime.now().strftime("%Y%m%d_%H%M%S")
     
     def create_new_log(self, groups=[]) -> Log:
+        """Cria um novo Log com os grupos de tags passados"""
         newLogPath = self.logsPath.joinpath(self._current_timestamp()) 
         os.mkdir(newLogPath)
         file = open(newLogPath.joinpath("log.json"), 'w')
@@ -94,9 +105,6 @@ class LogAgent():
         log = Log(path=newLogPath.joinpath("log.json"), groups=groups)
         self.currentLog = log
         return log
-
-    def load_log(self) -> Log:
-        pass
 
 class Environment:
 
