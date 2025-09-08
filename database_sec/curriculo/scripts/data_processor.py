@@ -22,6 +22,7 @@ def processar_linhas_csv(caminho_arquivo, coluna_id, colunas_prosa, colunas_list
     with open(caminho_arquivo, mode='r', encoding='utf-8') as arquivo_csv:
         leitor_csv = csv.DictReader(arquivo_csv)
 
+        # Esse for percorre todos os pesquisadores presentes no csv
         for i, linha in enumerate(leitor_csv):
             if not linha or not linha.get(coluna_id):
                 print(f"Aviso: Linha {i+2} do CSV ignorada por não conter um '{coluna_id}' válido.")
@@ -29,16 +30,19 @@ def processar_linhas_csv(caminho_arquivo, coluna_id, colunas_prosa, colunas_list
 
             id_pesquisador = linha[coluna_id]
 
+            # Adiciona o pesquisador ao dicionário
             if id_pesquisador not in dados_processados:
                 dados_processados[id_pesquisador] = {
                     "prose_chunks": [],
                     "list_chunks": []
                 }
 
+            # Percorre as colunas da linha específica daquele pesquisador
             for nome_coluna, valor_coluna in linha.items():
                 if not valor_coluna or valor_coluna.strip() == 'Sem registro':
                     continue
 
+                # Caso de ser colunas em listas com ;
                 if nome_coluna in colunas_lista:
                     itens_da_lista = valor_coluna.split('; ')
                     for item in itens_da_lista:
@@ -47,6 +51,7 @@ def processar_linhas_csv(caminho_arquivo, coluna_id, colunas_prosa, colunas_list
                             conteudo = f"Do registro com ID '{id_pesquisador}', um item da lista na coluna '{nome_coluna}' é: {item_limpo}"
                             dados_processados[id_pesquisador]["list_chunks"].append(conteudo)
                 
+                # Caso de ser 'description_project'
                 elif nome_coluna in colunas_lista_de_prosas:
                     # 1. Primeiro, divide a coluna em itens de lista
                     itens_da_lista = valor_coluna.split('; ')
@@ -61,6 +66,7 @@ def processar_linhas_csv(caminho_arquivo, coluna_id, colunas_prosa, colunas_list
                             conteudo = f"Do registro com ID '{id_pesquisador}', um trecho do item {k+1} da coluna '{nome_coluna}' é: {chunk}"
                             dados_processados[id_pesquisador]["prose_chunks"].append(conteudo)
                 
+                # Caso de ser abstract
                 elif nome_coluna in colunas_prosa:
                     chunks_de_prosa = text_splitter_prosa.split_text(valor_coluna)
                     for chunk in chunks_de_prosa:
