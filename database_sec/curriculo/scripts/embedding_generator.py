@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 from langchain_openai import OpenAIEmbeddings
 
 def gerar_embeddings_e_criar_dataframe(dados_processados):
@@ -32,19 +33,22 @@ def gerar_embeddings_e_criar_dataframe(dados_processados):
                 embeddings_lista = embeddings_model.embed_documents(chunks_data["list_chunks"])
                 print("  -> Embeddings de lista criados!")
 
+            prose_embeddings_vector = np.mean(embeddings_prosa, axis=0).tolist() if embeddings_prosa else []
+            list_embeddings_vector = np.mean(embeddings_lista, axis=0).tolist() if embeddings_lista else []    
+
             lista_para_df.append({
                 'id_pesquisador': id_pesquisador,
-                'embeddings_prosa': embeddings_prosa,
-                'embeddings_lista': embeddings_lista
+                'long_embeddings': prose_embeddings_vector,
+                'short_embeddings': list_embeddings_vector
             })
             
             i += 1
 
-        print(f"✔️ Embeddings gerados com sucesso para {len(lista_para_df)} pesquisadores.")
+        print(f" Embeddings gerados com sucesso para {len(lista_para_df)} pesquisadores.")
         return pd.DataFrame(lista_para_df)
 
     except Exception as e:
-        print("\n\033[91m❌ Ocorreu um erro ao gerar os embeddings ou criar o DataFrame.\033[0m")
+        print("\n\033[91m Ocorreu um erro ao gerar os embeddings ou criar o DataFrame.\033[0m")
         print("Verifique se a sua chave da API da OpenAI foi inserida corretamente.")
         print(f"Erro: {e}")
         return pd.DataFrame() # Retorna um DataFrame vazio em caso de erro
