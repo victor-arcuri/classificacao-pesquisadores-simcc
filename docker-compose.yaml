@@ -42,8 +42,7 @@ services:
       - /app/node_modules
     command: npm run dev
 
-  # 
-  api:
+    api:
     depends_on: 
       database:
         condition: service_started
@@ -59,7 +58,7 @@ services:
     environment:
       FRONT_URL: "http://localhost:${PORT_HOST_FRONT}"
       API_PORT: ${PORT_CONTAINER_API}
-      DATABASE_URL: "postgresql://${DB_USERNAME}:${DB_SENHA}@database:${DB_PORT_CONTAINER}/${DB_NAME}"
+     DATABASE_URL: "postgresql://${DB_USERNAME}:${DB_SENHA}@database:${DB_PORT_CONTAINER}/${DB_NAME}"
     command: sh -c "npx prisma generate && npm run dev"
 
 volumes:
