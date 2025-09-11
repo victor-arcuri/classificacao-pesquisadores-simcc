@@ -95,6 +95,9 @@ def processar_linhas_csv(caminho_arquivo, coluna_id, colunas_prosa, colunas_list
                             case "event_name":
                                 conteudo = f"Do registro com ID '{id_pesquisador}', o nome de um evento com participação é: {item_limpo}"
                                 dados_processados[id_pesquisador]["event_name"].append(conteudo)
+                            case "articles":
+                                conteudo = f"Do registro com ID '{id_pesquisador}', o nome de um evento com participação é: {item_limpo}"
+                                dados_processados[id_pesquisador]["articles"].append(conteudo)
                             case _:
                                 print(f"--- Aviso: Coluna de lista '{nome_coluna}' não possui um 'case' definido. ---")
 
