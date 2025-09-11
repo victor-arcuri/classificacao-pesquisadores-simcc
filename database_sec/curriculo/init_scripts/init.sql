@@ -4,8 +4,15 @@ CREATE EXTENSION IF NOT EXISTS "vector";
 -- Criação da tabela curriculos para armazenar os embeddings vetoriais
 CREATE TABLE IF NOT EXISTS curriculos (
     id_pesquisador UUID PRIMARY KEY,
-    long_embeddings VECTOR(1536),
-    short_embeddings VECTOR(1536),
+    abstract_embeddings VECTOR(1536),
+    articles_embeddings VECTOR(1536),
+    project_name_embeddings VECTOR(1536),
+    description_project_embeddings VECTOR(1536),
+    great_area_embeddings VECTOR(1536),
+    area_specialty_embeddings VECTOR(1536),
+    patent_embeddings VECTOR(1536),
+    book_chapter_embeddings VECTOR(1536),
+    event_name_embeddings VECTOR(1536),
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     updated_in TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
