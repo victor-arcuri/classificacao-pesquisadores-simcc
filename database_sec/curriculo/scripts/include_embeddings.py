@@ -20,7 +20,6 @@ def criar_conexao_e_inserir_dados(df_embeddings_curriculos):
         connection_string = f'postgresql+psycopg2://{usuario}:{senha}@{host}:{porta}/{banco}'
         engine = create_engine(connection_string)
 
-        # Query SQL corrigida para todas as colunas
         sql = text("""
             INSERT INTO curriculos (
                 id_pesquisador, abstract_embeddings, articles_embeddings, 
@@ -60,6 +59,12 @@ def criar_conexao_e_inserir_dados(df_embeddings_curriculos):
                     "book_chapter_embeddings": row.book_chapter_embeddings,
                     "event_name_embeddings": row.event_name_embeddings
                 }
+                
+                # Verifica se é uma lista vazia para substitui por None.
+                for key, value in parametros.items():
+                    if isinstance(value, list) and not value:
+                        parametros[key] = None
+                
                 conn.execute(sql, parametros)
         
         print("Dados de currículos inseridos/atualizados com sucesso!")

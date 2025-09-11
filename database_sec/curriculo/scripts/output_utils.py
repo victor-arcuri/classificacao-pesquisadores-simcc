@@ -63,14 +63,14 @@ def visualizar_dataframe(df):
 
     # Cria a tabela
     table = Table(show_header=True, header_style="bold magenta", box=None, padding=(0, 2))
-    table.add_column("ID do Pesquisador", style="bold cyan", overflow="fold")
+    table.add_column("ID do Pesquisador", style="bold cyan", no_wrap=True)
     
     colunas_embedding = [col for col in df.columns if col.endswith('_embeddings')]
     
     # Adiciona uma coluna na tabela para cada tipo de embedding
     for col_name in colunas_embedding:
         header = col_name.replace('_embeddings', '').replace('_', ' ').title()
-        table.add_column(f"Embeddings {header}", overflow="fold")
+        table.add_column(f"Embeddings {header}", no_wrap=True)
 
     dados_linha = [str(row_amostra["id_pesquisador"])]
     for col_name in colunas_embedding:
