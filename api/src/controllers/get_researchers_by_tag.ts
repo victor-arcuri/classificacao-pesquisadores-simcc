@@ -14,7 +14,7 @@ router.get("", async (req: Request, res: Response, next: NextFunction) => {
 
   try {
     const results = await searchResearchersByTag(tag);
-    res.json({ results });
+    res.json(results);
   } catch (error) {
     console.error("Erro na busca:", error);
     res.status(500).json({ error: "Erro interno no servidor" });
