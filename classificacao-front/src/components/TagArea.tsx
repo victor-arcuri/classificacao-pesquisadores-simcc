@@ -24,10 +24,8 @@ export default function TagArea({loading=false, tags=[], onTagClick, selectedTag
             `}
         >
             {!loading && tags.map((tag) => (
-                <div className="flex items-center" key={tag.name}>
-                    <div className={selectedTag == tag.name ? "h-24" : ""}>
-                        <Tag tagText={tag.name} onTagClick={onTagClick} selected={selectedTag === tag.name} />
-                    </div>
+                <div className="flex" key={tag.name}>
+                    <Tag tagText={tag.name} onTagClick={onTagClick} selected={selectedTag === tag.name} />
                     <TaggedResearchers isActive={selectedTag === tag.name} />
                 </div>
             ))}
