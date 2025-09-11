@@ -33,14 +33,14 @@ def gerar_embeddings_e_criar_dataframe(dados_processados):
                 
                 embedding_vetor = []
                 if lista_de_chunks:
-                    print(f"  -> Gerando embedding para a coluna '{nome_coluna}' ({len(lista_de_chunks)} chunks)...")
+                    print(f"  -> Gerando embeddings para a coluna '{nome_coluna}' ({len(lista_de_chunks)} chunks)...")
                     embeddings_da_coluna = embeddings_model.embed_documents(lista_de_chunks)
                     # Calcula a média dos vetores para criar um único embedding representativo
                     embedding_vetor = np.mean(embeddings_da_coluna, axis=0).tolist()
                 
                 # Adiciona o vetor de embedding ao dicionário da linha
-                # O nome da nova coluna será, por exemplo, 'abstract_embedding'
-                nova_linha[f'{nome_coluna}_embedding'] = embedding_vetor
+                # O nome da nova coluna será, por exemplo, 'abstract_embeddings'
+                nova_linha[f'{nome_coluna}_embeddings'] = embedding_vetor
 
             lista_para_df.append(nova_linha)
             i += 1

@@ -56,6 +56,6 @@ def main():
     print("\n\n\n\n")
     
     # Criar conexão e popular o banco
-    criar_conexao_e_inserir_dados(df_final)
+    #criar_conexao_e_inserir_dados(df_final)
     
 main()
