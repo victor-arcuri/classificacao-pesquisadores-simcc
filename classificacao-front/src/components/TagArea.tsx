@@ -26,7 +26,7 @@ export default function TagArea({loading=false, tags=[], onTagClick, selectedTag
             {tags.map((tag) => (
                 <div className="flex" key={tag.name}>
                     <Tag tagText={tag.name} onTagClick={onTagClick} selected={selectedTag === tag.name} />
-                    <TaggedResearchers isActive={selectedTag === tag.name} researchers={allResearchersByCategory.find(researchers=> (researchers.category == tag.name))?.researchers} />
+                    <TaggedResearchers isLoadingTagData={loading && selectedTag === tag.name} isActive={selectedTag === tag.name} researchers={allResearchersByCategory.find(researchers=> (researchers.category == tag.name))?.researchers} />
                 </div>
             ))}
         

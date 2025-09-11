@@ -31,52 +31,47 @@ export default function Home() {
     setSelectedTag(tagName);
   }
 
-  useEffect(() => {
-  if (selectedTag == null) return;
+    useEffect(() => {
+    if (selectedTag == null) return;
 
-  const handler = setTimeout(async () => {
-    setLoading(true);
-    try {
-      let shouldFetch = true;
-      setAllResearchersByCategory(currentData => {
-        if (currentData.find(item => item.category === selectedTag)) {
-          shouldFetch = false;
-        }
-        return currentData;
-      });
+    const isAlreadyCached = allResearchersByCategory.find(item => item.category === selectedTag);
 
-      if (!shouldFetch) {
-        setLoading(false);
-        return;
-      }
-
-      const res = await fetch(``);
-
-      if (!res.ok) {
-        console.debug("Erro HTTP:", res.status, res.statusText);
-        return;
-      }
-
-      const data = await res.json();
-
-      setAllResearchersByCategory(prevData => [
-        ...prevData,
-        {
-          "category": selectedTag,
-          "researchers": data
-        }
-      ]);
-
-    } catch (err) {
-      console.debug("Erro ao buscar pesquisadores da tag especificada", err);
-    } finally {
+    if (isAlreadyCached) {
       setLoading(false);
+      return; 
     }
-  }, 500);
 
-  return () => clearTimeout(handler);
+    setLoading(true);
+    const handler = setTimeout(async () => {
+      try {
+        const res = await fetch(`http://localhost:5000/api/teste/`);
 
-}, [selectedTag]);
+        if (!res.ok) {
+          console.debug("Erro HTTP:", res.status, res.statusText);
+          return;
+        }
+
+        const data = await res.json();
+
+        setAllResearchersByCategory(prevData => [
+          ...prevData,
+          {
+            "category": selectedTag,
+            "researchers": data
+          }
+        ]);
+
+      } catch (err) {
+        console.debug("Erro ao buscar pesquisadores da tag especificada", err);
+      } finally {
+        setLoading(false);
+      }
+    }, 500);
+
+    return () => clearTimeout(handler);
+
+  }, [selectedTag, allResearchersByCategory]);
+
   
   useEffect(() => {
     if (!query) {
