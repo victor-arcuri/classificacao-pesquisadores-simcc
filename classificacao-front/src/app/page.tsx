@@ -44,7 +44,7 @@ export default function Home() {
     setLoading(true);
     const handler = setTimeout(async () => {
       try {
-        const res = await fetch(`http://localhost:5000/api/teste/`);
+        const res = await fetch(`http://localhost:5000/api/researchers?tag=${encodeURIComponent(selectedTag)}`);
 
         if (!res.ok) {
           console.debug("Erro HTTP:", res.status, res.statusText);
@@ -52,7 +52,7 @@ export default function Home() {
         }
 
         const data = await res.json();
-
+        
         setAllResearchersByCategory(prevData => [
           ...prevData,
           {
@@ -60,6 +60,7 @@ export default function Home() {
             "researchers": data
           }
         ]);
+        
 
       } catch (err) {
         console.debug("Erro ao buscar pesquisadores da tag especificada", err);

@@ -20,6 +20,7 @@ export default function TaggedResearchers({isActive, researchers=[], isLoadingTa
                 </div>
             ) : (
                 <div className=" flex flex-wrap gap-3 text-sm">
+
                   {isActive && researchers.map((researcher) => (
                     <div key={researcher.id} className="border font-sans flex rounded-md items-center gap-2 w-fit p-2 hover:bg-neutral-100 cursor-pointer">
                         <div className="">
