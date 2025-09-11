@@ -2,6 +2,7 @@ import express, { Express } from 'express';
 import cors, { CorsOptions } from 'cors';
 import dotenv from 'dotenv';
 import searchRouter from '../src/controllers/search_controller.js'
+import researchersByTagRouter from '../src/controllers/get_researchers_by_tag.js'
 
 dotenv.config();
 
@@ -22,3 +23,4 @@ app.use(
 );
 
 app.use('/api/search', searchRouter);
+app.use('/api/researchers', researchersByTagRouter);
