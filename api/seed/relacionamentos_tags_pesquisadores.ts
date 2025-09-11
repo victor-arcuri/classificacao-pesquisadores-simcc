@@ -21,19 +21,23 @@ async function atribuirPesquisadoresAsTags() {
 
   for (const tag of tags) {
     const numeroDePesquisadores = Math.floor(Math.random() * 5) + 1;
+    const pesquisadores = Array.from({ length: numeroDePesquisadores }, () =>
+      retomarPesquisadorAleatorio()
+    );
 
-    for (let i = 0; i < numeroDePesquisadores; i++) {
-      const pesquisador = await retomarPesquisadorAleatorio();
-      if (!pesquisador) continue;
+    const results = await Promise.all(pesquisadores);
 
-      await prisma.researcher_tags_on_researchers.create({
-        data: {
-          researcher_id: pesquisador.id,
+    await prisma.researcher_tags_on_researchers.createMany({
+      data: results
+        .filter(Boolean)
+        .map(p => ({
+          researcher_id: p!.id,
           tag_id: tag.id,
-        },
-      });
-    }
+        })),
+      skipDuplicates: true,
+    });
   }
 }
+
 
 atribuirPesquisadoresAsTags();
