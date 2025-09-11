@@ -3,7 +3,7 @@
 import HeroSection from "@/components/HeroSection";
 import SearchBar from "@/components/SearchBar";
 import TagArea from "@/components/TagArea";
-import { TagResult } from "@/types/api";
+import { ResearchersByCategory, TagResult } from "@/types/api";
 
 import { useState, useEffect } from "react";
 
@@ -12,6 +12,7 @@ export default function Home() {
   const [tags, setTags] = useState<TagResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const [allResearchersByCategory, setAllResearchersByCategory] = useState<ResearchersByCategory[]>([]);
   
   const selectTag = (tagName: string) => {
     if (selectedTag == tagName){
@@ -29,6 +30,53 @@ export default function Home() {
     }
     setSelectedTag(tagName);
   }
+
+  useEffect(() => {
+  if (selectedTag == null) return;
+
+  const handler = setTimeout(async () => {
+    setLoading(true);
+    try {
+      let shouldFetch = true;
+      setAllResearchersByCategory(currentData => {
+        if (currentData.find(item => item.category === selectedTag)) {
+          shouldFetch = false;
+        }
+        return currentData;
+      });
+
+      if (!shouldFetch) {
+        setLoading(false);
+        return;
+      }
+
+      const res = await fetch(``);
+
+      if (!res.ok) {
+        console.debug("Erro HTTP:", res.status, res.statusText);
+        return;
+      }
+
+      const data = await res.json();
+
+      setAllResearchersByCategory(prevData => [
+        ...prevData,
+        {
+          "category": selectedTag,
+          "researchers": data
+        }
+      ]);
+
+    } catch (err) {
+      console.debug("Erro ao buscar pesquisadores da tag especificada", err);
+    } finally {
+      setLoading(false);
+    }
+  }, 500);
+
+  return () => clearTimeout(handler);
+
+}, [selectedTag]);
   
   useEffect(() => {
     if (!query) {
@@ -72,7 +120,7 @@ export default function Home() {
         </div>
 
         <div className="px-12 flex-1 p-3 min-h-0">
-          <TagArea loading={loading} tags={tags} onTagClick={selectTag} selectedTag={selectedTag}/>
+          <TagArea loading={loading} tags={tags} onTagClick={selectTag} selectedTag={selectedTag} allResearchersByCategory={allResearchersByCategory}/>
         </div>
       </div>
     </div>

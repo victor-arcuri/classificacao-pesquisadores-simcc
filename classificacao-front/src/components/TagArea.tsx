@@ -1,7 +1,6 @@
-import { useState } from "react";
 import Tag from "./Tag";
 import TaggedResearchers from "./TaggedResearchers";
-import { TagResult } from "@/types/api";
+import { ResearchersByCategory, TagResult } from "@/types/api";
 
 
 interface TagAreaProps {
@@ -9,10 +8,11 @@ interface TagAreaProps {
     tags?: TagResult[],
     onTagClick: (tagName: string) => void,
     selectedTag: null | string
+    allResearchersByCategory: ResearchersByCategory[]
 }
 
 
-export default function TagArea({loading=false, tags=[], onTagClick, selectedTag}: TagAreaProps){
+export default function TagArea({loading=false, tags=[], onTagClick, selectedTag, allResearchersByCategory}: TagAreaProps){
 
     return (
         <div 
@@ -23,10 +23,10 @@ export default function TagArea({loading=false, tags=[], onTagClick, selectedTag
                 'w-full h-full flex p-2 gap-3 content-start flex-wrap'}
             `}
         >
-            {!loading && tags.map((tag) => (
+            {tags.map((tag) => (
                 <div className="flex" key={tag.name}>
                     <Tag tagText={tag.name} onTagClick={onTagClick} selected={selectedTag === tag.name} />
-                    <TaggedResearchers isActive={selectedTag === tag.name} />
+                    <TaggedResearchers isActive={selectedTag === tag.name} researchers={allResearchersByCategory.find(researchers=> (researchers.category == tag.name))?.researchers} />
                 </div>
             ))}
         

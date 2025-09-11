@@ -8,3 +8,13 @@ export interface TagResult {
 export interface SearchResponse {
   results: TagResult[];
 }
+
+export interface Researcher {
+  id: string;
+  name: string;
+}
+
+export interface ResearchersByCategory{
+  category: string
+  researchers: Researcher[]
+}
