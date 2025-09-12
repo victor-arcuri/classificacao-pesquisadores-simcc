@@ -1,9 +1,9 @@
 import time
-from scripts.config import carregar_chave_api
-from scripts.data_processor import processar_linhas_csv
-from scripts.embedding_generator import gerar_embeddings_e_criar_dataframe
-from scripts.output_utils import visualizar_dataframe, visualizar_chunks
-from scripts.include_embeddings import criar_conexao_e_inserir_dados
+from curriculo_information.scripts.config import carregar_chave_api
+from curriculo_information.scripts.data_processor import processar_linhas_csv
+from curriculo_information.scripts.embedding_generator import gerar_embeddings_e_criar_dataframe
+from curriculo_information.scripts.output_utils import visualizar_dataframe, visualizar_chunks
+from curriculo_information.scripts.include_embeddings import criar_conexao_e_inserir_dados
 from tags_from_curriculos.tagging import gerar_tags_das_embeddings
 
 # recomendação para aprimorar: pegar artigos dos últimos anos
@@ -23,7 +23,7 @@ def main():
     """
 
     # --- Configurações do Script ---
-    CAMINHO_ARQUIVO = "./csv_information/dados_relevantes.csv"
+    CAMINHO_ARQUIVO = "./curriculo_information/csv_information/dados_relevantes.csv"
     COLUNA_ID = 'researcher_id'
     COLUNAS_PROSA = ['abstract']
     COLUNAS_LISTA_DE_PROSAS = ['description_project']
@@ -43,7 +43,7 @@ def main():
     print("-" * 50)
     
     # Visualizar chunks
-    visualizar_chunks(dados_processados)
+    #visualizar_chunks(dados_processados)
 
     # Gerar embeddings e criar DataFrame
     tempo_inicio = time.time()
@@ -57,10 +57,10 @@ def main():
     print("\n\n\n\n")
     
     # Criar conexão e popular o banco
-    #criar_conexao_e_inserir_dados(df_final)
+    criar_conexao_e_inserir_dados(df_final)
     
     # Gerar tags
-    gerar_tags_das_embeddings()
+    #gerar_tags_das_embeddings()
     
     
 main()

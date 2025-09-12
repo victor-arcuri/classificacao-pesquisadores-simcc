@@ -18,7 +18,7 @@ def gerar_embeddings_e_criar_dataframe(dados_processados):
         
         i = 1
         for id_pesquisador, chunks_data in dados_processados.items():
-            if i > 5:
+            if i > 15:
                 print("\nLimite de 5 pesquisadores atingido para o teste.")
                 break
             
