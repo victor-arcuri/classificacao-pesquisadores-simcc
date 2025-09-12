@@ -4,6 +4,7 @@ from scripts.data_processor import processar_linhas_csv
 from scripts.embedding_generator import gerar_embeddings_e_criar_dataframe
 from scripts.output_utils import visualizar_dataframe, visualizar_chunks
 from scripts.include_embeddings import criar_conexao_e_inserir_dados
+from tags_from_curriculos.tagging import gerar_tags_das_embeddings
 
 # recomendação para aprimorar: pegar artigos dos últimos anos
 # pegar informação do openalex
@@ -46,16 +47,20 @@ def main():
 
     # Gerar embeddings e criar DataFrame
     tempo_inicio = time.time()
-    df_final = gerar_embeddings_e_criar_dataframe(dados_processados)
+    listas_embeddings, df_final = gerar_embeddings_e_criar_dataframe(dados_processados)
     tempo_fim = time.time()
     print(f"Duração da geração de embeddings: {tempo_fim-tempo_inicio:.2f} segundos")
 
     # Visualizar as embeddings no dataframe
-    visualizar_dataframe(df_final)
+    #visualizar_dataframe(df_final)
     
     print("\n\n\n\n")
     
     # Criar conexão e popular o banco
-    criar_conexao_e_inserir_dados(df_final)
+    #criar_conexao_e_inserir_dados(df_final)
+    
+    # Gerar tags
+    gerar_tags_das_embeddings()
+    
     
 main()
