@@ -110,8 +110,10 @@ def generate_tags_pipeline(client: OpenAI, pesquisadores: dict) -> tuple[dict, l
         break
     
     tags_globais = set()
-    for t in tags_por_pesquisador.values():
-        tags_globais.update(t)
+    for t_list in tags_por_pesquisador.values():
+        for tag in t_list:
+            tags_globais.add(tag.strip())  
+    tags_globais = list(tags_globais)
 
     return tags_por_pesquisador, list(tags_globais)
 
@@ -120,7 +122,11 @@ def generate_tags_pipeline(client: OpenAI, pesquisadores: dict) -> tuple[dict, l
 def visualize_tags(tags_por_pesquisador: dict, tags_globais: list[str]):
     print("Tags por pesquisador:")
     for p, tags in tags_por_pesquisador.items():
-        print(f"{p}: {tags}")
+        print(f"Pesquisador de ID:{p}\n\n {tags}")
+        quant_tags_pesquisador = len(tags)
+        print(f"Este pesquisador tem {quant_tags_pesquisador} tags")
 
     print("\nTags globais:")
+    quant_tags_globais = len(tags_globais)
+    print("Existem {quant_tags_globais} tags globais")
     print(tags_globais)
