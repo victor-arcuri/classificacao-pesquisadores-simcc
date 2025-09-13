@@ -3,85 +3,124 @@ import time
 from openai import OpenAI
 from dotenv import load_dotenv
 
-def criar_client():
+# Domínios temáticos disponíveis
+DOMINIOS = [
+    "Ciência da Computação e Tecnologia",
+    "Educação e Ensino",
+    "Saúde e Medicina",
+    "Biologia e Ciências da Vida",
+    "Química e Farmacologia",
+    "Engenharia e Indústria",
+    "Energia e Sustentabilidade",
+    "Matemática e Estatística",
+    "Física",
+    "Ciências Sociais e Humanas",
+    "Economia e Negócios",
+    "Direito e Políticas Públicas",
+    "Artes e Cultura",
+    "Ciência de Dados e Inteligência Artificial",
+    "Meio Ambiente e Ecologia",
+]
+
+# Criar cliente OpenAI
+def criar_client() -> OpenAI:
     load_dotenv()
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
     return client
 
-# --- Gera tags de um chunk ---
-def generate_tags_from_chunk(chunk_text, column_name):
+# Gerar tags de um chunk
+def generate_tags_from_chunk(client: OpenAI, chunk_text: str, column_name: str) -> list[str]:
     prompt = f"""
     Gere entre 1 e 3 tags curtas, relevantes e SIGNIFICATIVAS para o seguinte texto da coluna '{column_name}':
-
+    
     {chunk_text}
-
-    Regras importantes:
-    - As tags devem ser SEMÂNTICAS: representar temas, áreas de estudo, tecnologias, métodos ou conceitos.
-    - Pode incluir tanto termos específicos quanto termos mais amplos relacionados.
-      Exemplos:
-        - "coronavírus" → também pode gerar "biologia", "saúde pública".
-        - "ensino inovador" → também pode gerar "educação", "inovação".
-        - "tomada de decisões" → também pode gerar "negócios", "administração".
-    - NÃO use:
-      - nomes de empresas (ex: "speed informática ltda")
-      - siglas soltas ou códigos (ex: "RDC 350/2020", "XXII", "TC 504 Gertec")
-      - palavras vagas ou genéricas sem semântica clara (ex: "prevalência", "sistema", "marcadores")
-      - termos soltos sem contexto (ex: "e-lixo")
-    - Sempre use português e, quando possível, no singular.
-    - Responda apenas com as tags separadas por vírgula, sem frases extras.
+    
+    Regras:
+    - Semânticas, representando temas, áreas, métodos ou conceitos.
+    - Pode incluir termos específicos ou mais amplos relacionados.
+    - Ex.: "coronavírus" → também "biologia", "saúde pública".
+           "ensino inovador" → também "educação", "inovação".
+           "tomada de decisões" → também "negócios", "administração".
+    - Não use nomes de empresas, siglas soltas, códigos ou palavras genéricas sem contexto.
+    - Português, preferencialmente no singular.
+    - Responda apenas com as tags separadas por vírgula.
     """
-    response = criar_client().chat.completions.create(
+    response = client.chat.completions.create(
         model="gpt-4.1-mini",
         messages=[{"role": "user", "content": prompt}]
     )
-    return list(set([t.strip() for t in response.choices[0].message.content.strip().split(",")]))
+    content = response.choices[0].message.content.strip()
+    return list(set([t.strip() for t in content.split(",") if t.strip()]))
 
-# --- Gerar tags a partir de todas as chunks de uma coluna ---
-def generate_tags_from_column(chunks, column_name):
-    tags = set()
+# Filtrar tags por domínios
+def filtrar_tag_por_dominio(client: OpenAI, tag: str, dominios=DOMINIOS) -> str | None:
+    prompt = f"""
+    Classifique a tag abaixo em um dos domínios listados.
+    Se não fizer sentido em nenhum, responda apenas 'DESCARTAR'.
+
+    Tag: "{tag}"
+    Domínios: {', '.join(dominios)}
+    """
+    resp = client.chat.completions.create(
+        model="gpt-4.1-mini",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0
+    )
+    classificacao = resp.choices[0].message.content.strip()
+    if classificacao.upper() == "DESCARTAR":
+        return None
+    return classificacao
+
+# Gerar tags de uma coluna inteira
+def generate_tags_from_column(client: OpenAI, chunks: list[str], column_name: str) -> list[str]:
+    all_tags = set()
     for chunk in chunks:
         try:
-            tags.update(generate_tags_from_chunk(chunk, column_name))
+            tags = generate_tags_from_chunk(client, chunk, column_name)
+            for t in tags:
+                dominio = filtrar_tag_por_dominio(client, t)
+                if dominio:
+                    all_tags.add(t)
         except Exception as e:
-            print(f"Erro ao gerar tags para chunk da coluna {column_name}: {e}")
-    return list(tags)
+            print(f"Erro ao gerar tags para chunk da coluna '{column_name}': {e}")
+    return list(all_tags)
 
-# --- Função por pesquisador ---
-def generate_tags_for_researcher(chunks_dict):
+# Gerar tags por pesquisador
+def generate_tags_for_researcher(client: OpenAI, chunks_dict: dict) -> list[str]:
     tags = set()
     for column_name, chunks in chunks_dict.items():
-        if column_name == 'metadata':
+        if column_name == "metadata":
             continue
         tempo_inicio = time.time()
-        tags.update(generate_tags_from_column(chunks, column_name))
+        column_tags = generate_tags_from_column(client, chunks, column_name)
+        tags.update(column_tags)
         tempo_fim = time.time()
-        print(f"Duração da geração de tags da coluna '{column_name}': {tempo_fim-tempo_inicio:.2f} segundos")
-        print(f"Gerou tags da coluna: {column_name}")
+        print(f"Duração da coluna '{column_name}': {tempo_fim - tempo_inicio:.2f} seg")
     return list(tags)
 
-# --- Função principal ----
-def generate_tags_pipeline(pesquisadores):
+# Pipeline principal
+def generate_tags_pipeline(client: OpenAI, pesquisadores: dict) -> tuple[dict, list[str]]:
     tags_por_pesquisador = {}
     i = 1
     for pesquisador, chunks_dict in pesquisadores.items():
         if i < 2:
             print(f"Gerando tags para {pesquisador}...")
-            tags_por_pesquisador[pesquisador] = generate_tags_for_researcher(chunks_dict)
+            tags_por_pesquisador[pesquisador] = generate_tags_for_researcher(client, chunks_dict)
             i += 1
         break
-
+    
     tags_globais = set()
-    for tags in tags_por_pesquisador.values():
-        tags_globais.update(tags)
+    for t in tags_por_pesquisador.values():
+        tags_globais.update(t)
 
     return tags_por_pesquisador, list(tags_globais)
 
-# ---- Vizualização ----
-def visualize_tags(tags_por_pesquisador, tags_globais):
+
+# Visualização
+def visualize_tags(tags_por_pesquisador: dict, tags_globais: list[str]):
     print("Tags por pesquisador:")
     for p, tags in tags_por_pesquisador.items():
         print(f"{p}: {tags}")
 
     print("\nTags globais:")
     print(tags_globais)
-
