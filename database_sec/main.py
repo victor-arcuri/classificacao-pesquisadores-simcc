@@ -4,7 +4,7 @@ from curriculo_information.scripts.data_processor import processar_linhas_csv
 from curriculo_information.scripts.embedding_generator import gerar_embeddings_e_criar_dataframe
 from curriculo_information.scripts.output_utils import visualizar_dataframe, visualizar_chunks
 from curriculo_information.scripts.include_embeddings import criar_conexao_e_inserir_dados
-from tags_from_curriculos.tagging import gerar_tags_das_embeddings
+from tags_from_curriculos.tagging import generate_tags_pipeline, visualize_tags
 
 # recomendação para aprimorar: pegar artigos dos últimos anos
 # pegar informação do openalex
@@ -46,21 +46,22 @@ def main():
     #visualizar_chunks(dados_processados)
 
     # Gerar embeddings e criar DataFrame
-    tempo_inicio = time.time()
-    listas_embeddings, df_final = gerar_embeddings_e_criar_dataframe(dados_processados)
-    tempo_fim = time.time()
-    print(f"Duração da geração de embeddings: {tempo_fim-tempo_inicio:.2f} segundos")
+    #tempo_inicio = time.time()
+    #listas_embeddings, df_final = gerar_embeddings_e_criar_dataframe(dados_processados)
+    #tempo_fim = time.time()
+    #print(f"Duração da geração de embeddings: {tempo_fim-tempo_inicio:.2f} segundos")
 
     # Visualizar as embeddings no dataframe
     #visualizar_dataframe(df_final)
     
-    print("\n\n\n\n")
+    print("\n\n\n")
     
     # Criar conexão e popular o banco
-    criar_conexao_e_inserir_dados(df_final)
+    #criar_conexao_e_inserir_dados(df_final)
     
     # Gerar tags
-    #gerar_tags_das_embeddings()
+    tags_por_pesquisador, tags_globais = generate_tags_pipeline(dados_processados)
+    visualize_tags(tags_por_pesquisador, tags_globais)
     
     
 main()

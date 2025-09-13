@@ -1,74 +1,87 @@
-from typing import List, Set
-from pydantic import BaseModel, Field
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI
-from langchain_core.runnables import Runnable
+import os
+import time
+from openai import OpenAI
+from dotenv import load_dotenv
 
-class TagOutput(BaseModel):
-    tags: List[str] = Field(..., description="Lista extensa de termos que representam temas desse embedding")
+def criar_client():
+    load_dotenv()
+    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    return client
 
-def configurar_chain_de_tags() -> Runnable:
-    prompt = ChatPromptTemplate.from_template(
-        """
-        Você é um especialista em analisar conteúdo acadêmico.
-        O vetor de embedding a seguir representa o conteúdo da seção '{nome_da_secao}'.
+# --- Gera tags de um chunk ---
+def generate_tags_from_chunk(chunk_text, column_name):
+    prompt = f"""
+    Gere entre 1 e 3 tags curtas, relevantes e SIGNIFICATIVAS para o seguinte texto da coluna '{column_name}':
 
-        Vetor:
-        {embedding}
+    {chunk_text}
 
-        Com base neste vetor, gere o máximo possível de tags que capturem temas, áreas de conhecimento,
-        disciplinas, métodos, objetos de estudo ou aplicações relacionadas.
-
-        Retorne uma estrutura com a chave "tags", contendo uma lista de strings variadas (mínimo de 30 tags).
-        """
+    Regras importantes:
+    - As tags devem ser SEMÂNTICAS: representar temas, áreas de estudo, tecnologias, métodos ou conceitos.
+    - Pode incluir tanto termos específicos quanto termos mais amplos relacionados.
+      Exemplos:
+        - "coronavírus" → também pode gerar "biologia", "saúde pública".
+        - "ensino inovador" → também pode gerar "educação", "inovação".
+        - "tomada de decisões" → também pode gerar "negócios", "administração".
+    - NÃO use:
+      - nomes de empresas (ex: "speed informática ltda")
+      - siglas soltas ou códigos (ex: "RDC 350/2020", "XXII", "TC 504 Gertec")
+      - palavras vagas ou genéricas sem semântica clara (ex: "prevalência", "sistema", "marcadores")
+      - termos soltos sem contexto (ex: "e-lixo")
+    - Sempre use português e, quando possível, no singular.
+    - Responda apenas com as tags separadas por vírgula, sem frases extras.
+    """
+    response = criar_client().chat.completions.create(
+        model="gpt-4.1-mini",
+        messages=[{"role": "user", "content": prompt}]
     )
-    llm = ChatOpenAI(model="gpt-4", temperature=0.5).with_structured_output(TagOutput)
-    return prompt | llm
+    return list(set([t.strip() for t in response.choices[0].message.content.strip().split(",")]))
 
-def obter_tags_para_embedding(chain: Runnable, nome_da_secao: str, embedding_vetor: List[float]) -> List[str]:
-    try:
-        print(f"  -> Gerando tags para a seção: '{nome_da_secao}'...")
-        embedding_str = str(embedding_vetor)
-        
-        result = chain.invoke({
-            "embedding": embedding_str,
-            "nome_da_secao": nome_da_secao
-        })
+# --- Gerar tags a partir de todas as chunks de uma coluna ---
+def generate_tags_from_column(chunks, column_name):
+    tags = set()
+    for chunk in chunks:
+        try:
+            tags.update(generate_tags_from_chunk(chunk, column_name))
+        except Exception as e:
+            print(f"Erro ao gerar tags para chunk da coluna {column_name}: {e}")
+    return list(tags)
 
-        if result and result.tags:
-            print(f"    - Adicionadas {len(result.tags)} tags.")
-            return result.tags
-            
-    except Exception as e:
-        print(f"    - Ocorreu um erro ao processar a seção '{nome_da_secao}': {e}")
-    
-    return []
+# --- Função por pesquisador ---
+def generate_tags_for_researcher(chunks_dict):
+    tags = set()
+    for column_name, chunks in chunks_dict.items():
+        if column_name == 'metadata':
+            continue
+        tempo_inicio = time.time()
+        tags.update(generate_tags_from_column(chunks, column_name))
+        tempo_fim = time.time()
+        print(f"Duração da geração de tags da coluna '{column_name}': {tempo_fim-tempo_inicio:.2f} segundos")
+        print(f"Gerou tags da coluna: {column_name}")
+    return list(tags)
 
-def gerar_tags_das_embeddings(listas_com_embeddings: List[dict]):
-    chain = configurar_chain_de_tags()
-    conjunto_geral_de_tags: Set[str] = set()
+# --- Função principal ----
+def generate_tags_pipeline(pesquisadores):
+    tags_por_pesquisador = {}
+    i = 1
+    for pesquisador, chunks_dict in pesquisadores.items():
+        if i < 2:
+            print(f"Gerando tags para {pesquisador}...")
+            tags_por_pesquisador[pesquisador] = generate_tags_for_researcher(chunks_dict)
+            i += 1
+        break
 
-    print("Iniciando a geração de tags para os 20 primeiros pesquisadores...")
+    tags_globais = set()
+    for tags in tags_por_pesquisador.values():
+        tags_globais.update(tags)
 
-    for dicionario_pesquisador in listas_com_embeddings[:20]:
-        pesquisador_id = dicionario_pesquisador.get('id_pesquisador', 'ID não encontrado')
-        print(f"\nProcessando pesquisador: {pesquisador_id}")
-        
-        for nome_coluna, valor_coluna in dicionario_pesquisador.items():
-            if nome_coluna.endswith('_embeddings') and valor_coluna:
-                nome_da_secao = nome_coluna.replace('_embeddings', '')
-                
-                novas_tags = obter_tags_para_embedding(chain, nome_da_secao, valor_coluna)
-                
-                if novas_tags:
-                    conjunto_geral_de_tags.update(novas_tags)
+    return tags_por_pesquisador, list(tags_globais)
 
-    print("\n" + "="*50)
-    print("PROCESSAMENTO FINALIZADO")
-    print(f"Total de tags únicas geradas: {len(conjunto_geral_de_tags)}")
-    print("="*50)
+# ---- Vizualização ----
+def visualize_tags(tags_por_pesquisador, tags_globais):
+    print("Tags por pesquisador:")
+    for p, tags in tags_por_pesquisador.items():
+        print(f"{p}: {tags}")
 
-    lista_tags_finais = sorted(list(conjunto_geral_de_tags))
+    print("\nTags globais:")
+    print(tags_globais)
 
-    print("\nAmostra de até 100 tags geradas (em ordem alfabética):")
-    print(lista_tags_finais[:100])
