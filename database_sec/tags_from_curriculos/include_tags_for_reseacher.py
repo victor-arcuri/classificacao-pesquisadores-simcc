@@ -4,14 +4,13 @@ import os
 from dotenv import load_dotenv
 import numpy as np
 
-def criar_conexao_e_inserir_tags_globais(tags_globais):
+def criar_conexao_e_inserir_tags_dos_pesquisadores(tags_pesquisadores):
     
-    # Tags globais é só uma lista com todas as tags
-    # Criar ID para as tags com UUID (para criar tabela que cria a relação com o id dos pesquisadores depois)
-    # Data de criação e atualização
+    # Para cada pesquisador, tem uma lista de tags
+    # Colocar id_tag e id_pesquisador
     
     """
-    Cria uma conexão com o banco de dados e insere ou atualiza as tags dos currículos.
+    Cria uma conexão com o banco de dados e insere ou atualiza os embeddings de currículos.
     """
     try:
         load_dotenv()
@@ -26,7 +25,7 @@ def criar_conexao_e_inserir_tags_globais(tags_globais):
         engine = create_engine(connection_string)
 
         sql = text("""
-            INSERT INTO curriculos (
+            INSERT INTO researcher_tags_on_researchers (
                 id_pesquisador, abstract_embeddings, articles_embeddings, 
                 project_name_embeddings, description_project_embeddings, 
                 great_area_embeddings, area_specialty_embeddings, 
@@ -51,7 +50,7 @@ def criar_conexao_e_inserir_tags_globais(tags_globais):
         """)
 
         with engine.begin() as conn:
-            for row in tags_globais.itertuples():
+            for row in tags_pesquisadores.itertuples():
                 parametros = {
                     "id_pesquisador": row.id_pesquisador,
                     "abstract_embeddings": row.abstract_embeddings,
