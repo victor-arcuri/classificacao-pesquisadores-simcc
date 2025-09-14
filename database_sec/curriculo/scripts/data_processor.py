@@ -3,11 +3,11 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 def processar_linhas_csv(caminho_arquivo, coluna_id, colunas_prosa, colunas_lista, colunas_lista_de_prosas, chunk_size, chunk_overlap):
     """
-    Lê um arquivo CSV e processa seu conteúdo, separando os textos em chunks de prosa e de lista.
+    Lê um arquivo CSV e processa seu conteúdo, separando os textos em chunks.
 
     Retorna:
         dict: Um dicionário onde cada chave é um researcher_id e o valor contém
-              listas de 'prose_chunks' e 'list_chunks'.
+              listas de chunks para cada coluna e um dicionário de metadados.
     """
     dados_processados = {}
 
@@ -30,11 +30,18 @@ def processar_linhas_csv(caminho_arquivo, coluna_id, colunas_prosa, colunas_list
 
             id_pesquisador = linha[coluna_id]
 
-            # Adiciona o pesquisador ao dicionário
+            # Adiciona o pesquisador ao dicionário se for a primeira vez que o encontramos
             if id_pesquisador not in dados_processados:
                 dados_processados[id_pesquisador] = {
-                    "prose_chunks": [],
-                    "list_chunks": []
+                    "abstract": [],
+                    "articles": [],
+                    "project_name": [],
+                    "description_project": [],
+                    "great_area": [],
+                    "area_specialty": [],
+                    "patent": [], 
+                    "book_chapter": [],
+                    "event_name": []
                 }
 
             # Percorre as colunas da linha específica daquele pesquisador
@@ -42,40 +49,67 @@ def processar_linhas_csv(caminho_arquivo, coluna_id, colunas_prosa, colunas_list
                 if not valor_coluna or valor_coluna.strip() == 'Sem registro':
                     continue
 
-                # Caso de ser colunas em listas com ;
-                if nome_coluna in colunas_lista:
-                    itens_da_lista = valor_coluna.split('; ')
-                    for item in itens_da_lista:
-                        item_limpo = item.strip()
-                        if item_limpo:
-                            conteudo = f"Do registro com ID '{id_pesquisador}', um item da lista na coluna '{nome_coluna}' é: {item_limpo}"
-                            dados_processados[id_pesquisador]["list_chunks"].append(conteudo)
+                # Caso de ser 'abstract' 
+                if nome_coluna in colunas_prosa:
+                    chunks_de_prosa = text_splitter_prosa.split_text(valor_coluna)
+                    for chunk in chunks_de_prosa:
+                        conteudo = f"Do registro com ID '{id_pesquisador}', um trecho da coluna '{nome_coluna}' é: {chunk}"
+                        dados_processados[id_pesquisador][nome_coluna].append(conteudo)
                 
                 # Caso de ser 'description_project'
                 elif nome_coluna in colunas_lista_de_prosas:
-                    # 1. Primeiro, divide a coluna em itens de lista
                     itens_da_lista = valor_coluna.split('; ')
                     for k, item in enumerate(itens_da_lista):
                         item_limpo = item.strip()
                         if not item_limpo: continue
                         
-                        # 2. Depois, aplica o text_splitter a cada item individualmente
                         chunks_do_item = text_splitter_prosa.split_text(item_limpo)
                         
                         for j, chunk in enumerate(chunks_do_item):
                             conteudo = f"Do registro com ID '{id_pesquisador}', um trecho do item {k+1} da coluna '{nome_coluna}' é: {chunk}"
-                            dados_processados[id_pesquisador]["prose_chunks"].append(conteudo)
+                            dados_processados[id_pesquisador][nome_coluna].append(conteudo)
                 
-                # Caso de ser abstract
-                elif nome_coluna in colunas_prosa:
-                    chunks_de_prosa = text_splitter_prosa.split_text(valor_coluna)
-                    for chunk in chunks_de_prosa:
-                        conteudo = f"Do registro com ID '{id_pesquisador}', um trecho da coluna '{nome_coluna}' é: {chunk}"
-                        dados_processados[id_pesquisador]["prose_chunks"].append(conteudo)
+                # --- Cada caso de colunas com listas ---
+                elif nome_coluna in colunas_lista:
+                    itens_da_lista = valor_coluna.split('; ')
+                    for item in itens_da_lista:
+                        item_limpo = item.strip()
+                        if not item_limpo: continue
 
-                else:
-                    if nome_coluna != coluna_id:
-                        conteudo = f"Do registro com ID '{id_pesquisador}', a informação de '{nome_coluna}' é: '{valor_coluna}'"
-                        dados_processados[id_pesquisador]["list_chunks"].append(conteudo)
+                        match nome_coluna:
+                            case "project_name":
+                                conteudo = f"Do registro com ID '{id_pesquisador}', o nome de um projeto é: {item_limpo}"
+                                dados_processados[id_pesquisador]["project_name"].append(conteudo)
+                            case "great_area":
+                                conteudo = f"Do registro com ID '{id_pesquisador}', uma grande área de atuação é: {item_limpo}"
+                                dados_processados[id_pesquisador]["great_area"].append(conteudo)
+                            case "area_specialty":
+                                conteudo = f"Do registro com ID '{id_pesquisador}', uma especialidade da área é: {item_limpo}"
+                                dados_processados[id_pesquisador]["area_specialty"].append(conteudo)
+                            case "patent":
+                                conteudo = f"Do registro com ID '{id_pesquisador}', uma patente registrada é: {item_limpo}"
+                                dados_processados[id_pesquisador]["patent"].append(conteudo)
+                            case "book_chapter":
+                                conteudo = f"Do registro com ID '{id_pesquisador}', um capítulo de livro publicado é: {item_limpo}"
+                                dados_processados[id_pesquisador]["book_chapter"].append(conteudo)
+                            case "event_name":
+                                conteudo = f"Do registro com ID '{id_pesquisador}', o nome de um evento com participação é: {item_limpo}"
+                                dados_processados[id_pesquisador]["event_name"].append(conteudo)
+                            case "articles":
+                                conteudo = f"Do registro com ID '{id_pesquisador}', o nome de um evento com participação é: {item_limpo}"
+                                dados_processados[id_pesquisador]["articles"].append(conteudo)
+                            case _:
+                                print(f"--- Aviso: Coluna de lista '{nome_coluna}' não possui um 'case' definido. ---")
+
+    # --- Criação dos Metadados ---
+    for id_pesquisador, dados in dados_processados.items():
+        chunk_counts = {}
+        for nome_coluna, lista_chunks in dados.items():
+            chunk_counts[nome_coluna] = len(lista_chunks)
+
+        dados["metadata"] = {
+            "researcher_id": id_pesquisador,
+            "chunk_counts": chunk_counts
+        }
 
     return dados_processados
