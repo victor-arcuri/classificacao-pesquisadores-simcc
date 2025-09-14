@@ -3,6 +3,7 @@ from scripts.config import carregar_chave_api
 from scripts.data_processor import processar_linhas_csv
 from scripts.embedding_generator import gerar_embeddings_e_criar_dataframe
 from scripts.output_utils import visualizar_dataframe, visualizar_chunks
+from scripts.include_embeddings import criar_conexao_e_inserir_dados
 
 # recomendação para aprimorar: pegar artigos dos últimos anos
 # pegar informação do openalex
@@ -21,7 +22,7 @@ def main():
     """
 
     # --- Configurações do Script ---
-    CAMINHO_ARQUIVO = "./dados_relevantes.csv"
+    CAMINHO_ARQUIVO = "./csv_information/dados_relevantes.csv"
     COLUNA_ID = 'researcher_id'
     COLUNAS_PROSA = ['abstract']
     COLUNAS_LISTA_DE_PROSAS = ['description_project']
@@ -51,5 +52,10 @@ def main():
 
     # Visualizar as embeddings no dataframe
     visualizar_dataframe(df_final)
+    
+    print("\n\n\n\n")
+    
+    # Criar conexão e popular o banco
+    criar_conexao_e_inserir_dados(df_final)
     
 main()

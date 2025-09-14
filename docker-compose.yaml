@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   database:
     image: pgvector/pgvector:pg17
@@ -12,6 +10,21 @@ services:
     ports: 
       - "${DB_PORT_HOST}:${DB_PORT_CONTAINER}"
     container_name: ${NOME_CONTAINER_DB}
+
+  curriculo_db:
+    restart: always
+    build:  
+      context: ./database_sec/curriculo
+      dockerfile: curriculo.dockerfile
+    environment:
+      POSTGRES_USER: ${CURRICULO_DB_USER}
+      POSTGRES_PASSWORD: ${CURRICULO_DB_PASSWORD}
+      POSTGRES_DB: ${CURRICULO_DB_NAME}
+    volumes:
+      - curriculo_pgdata:/var/lib/postgresql/data
+    ports: 
+      - "${CURRICULO_DB_PORT_HOST}:${DB_PORT_CONTAINER}"
+    container_name: ${NOME_CONTAINER_CURRICULO_DB}
 
   front-end:
     depends_on: 
@@ -29,7 +42,7 @@ services:
       - /app/node_modules
     command: npm run dev
 
-  api:
+    api:
     depends_on: 
       database:
         condition: service_started
@@ -45,8 +58,9 @@ services:
     environment:
       FRONT_URL: "http://localhost:${PORT_HOST_FRONT}"
       API_PORT: ${PORT_CONTAINER_API}
-      DATABASE_URL: "postgresql://${DB_USERNAME}:${DB_SENHA}@database:${DB_PORT_CONTAINER}/${DB_NAME}"
+     DATABASE_URL: "postgresql://${DB_USERNAME}:${DB_SENHA}@database:${DB_PORT_CONTAINER}/${DB_NAME}"
     command: sh -c "npx prisma generate && npm run dev"
 
 volumes:
   pgdata:
+  curriculo_pgdata:
