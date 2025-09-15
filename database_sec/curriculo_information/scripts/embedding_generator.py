@@ -18,7 +18,7 @@ def gerar_embeddings_e_criar_dataframe(dados_processados):
         
         i = 1
         for id_pesquisador, chunks_data in dados_processados.items():
-            if i > 5:
+            if i > 15:
                 print("\nLimite de 5 pesquisadores atingido para o teste.")
                 break
             
@@ -46,7 +46,7 @@ def gerar_embeddings_e_criar_dataframe(dados_processados):
             i += 1
 
         print(f"\nEmbeddings gerados com sucesso para {len(lista_para_df)} pesquisadores.")
-        return pd.DataFrame(lista_para_df)
+        return lista_para_df, pd.DataFrame(lista_para_df)
 
     except Exception as e:
         print("\n\033[91m Ocorreu um erro ao gerar os embeddings ou criar o DataFrame.\033[0m")
