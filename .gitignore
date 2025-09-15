@@ -211,3 +211,5 @@ database/tags.sql
 
 ./node_modules
 ./package*.json
+
+!classificacao-front/src/lib/

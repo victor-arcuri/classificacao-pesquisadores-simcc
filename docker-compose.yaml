@@ -42,7 +42,7 @@ services:
       - /app/node_modules
     command: npm run dev
 
-    api:
+  api:
     depends_on: 
       database:
         condition: service_started

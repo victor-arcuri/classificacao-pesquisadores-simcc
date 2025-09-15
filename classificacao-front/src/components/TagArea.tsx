@@ -1,0 +1,35 @@
+import Tag from "./Tag";
+import TaggedResearchers from "./TaggedResearchers";
+import { ResearchersByCategory, TagResult } from "@/types/api";
+
+
+interface TagAreaProps {
+    loading?: boolean,
+    tags?: TagResult[],
+    onTagClick: (tagName: string) => void,
+    selectedTag: null | string
+    allResearchersByCategory: ResearchersByCategory[]
+}
+
+
+export default function TagArea({loading=false, tags=[], onTagClick, selectedTag, allResearchersByCategory}: TagAreaProps){
+
+    return (
+        <div 
+            className={`
+            ${selectedTag != null ? 
+                'w-full h-full flex p-2 gap-3 content-start flex-col bg-neutral-100 border rounded-xl  overflow-y-auto' 
+                : 
+                'w-full h-full flex p-2 gap-3 content-start flex-wrap'}
+            `}
+        >
+            {tags.map((tag) => (
+                <div className="flex" key={tag.name}>
+                    <Tag tagText={tag.name} onTagClick={onTagClick} selected={selectedTag === tag.name} />
+                    <TaggedResearchers isLoadingTagData={loading && selectedTag === tag.name} isActive={selectedTag === tag.name} researchers={allResearchersByCategory.find(researchers=> (researchers.category == tag.name))?.researchers} />
+                </div>
+            ))}
+        
+        </div>
+    );
+}
