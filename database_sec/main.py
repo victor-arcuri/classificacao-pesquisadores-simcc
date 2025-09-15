@@ -5,6 +5,7 @@ from curriculo_information.scripts.embedding_generator import gerar_embeddings_e
 from curriculo_information.scripts.output_utils import visualizar_dataframe, visualizar_chunks
 from curriculo_information.scripts.include_embeddings import criar_conexao_e_inserir_dados
 from tags_from_curriculos.tagging import generate_tags_pipeline, visualize_tags, criar_client
+from tags_from_curriculos.include_tags import criar_conexao_e_inserir_tags_globais
 
 # recomendação para aprimorar: pegar artigos dos últimos anos
 # pegar informação do openalex
@@ -56,14 +57,13 @@ def main():
     
     print("\n\n\n")
     
-    # Criar conexão e popular o banco
+    # Criar conexão e popular o banco com embeddings
     #criar_conexao_e_inserir_dados(df_final)
     
     # Gerar tags
     client = criar_client()
     tags_por_pesquisador, tags_globais = generate_tags_pipeline(client, dados_processados)
     visualize_tags(tags_por_pesquisador, tags_globais)
-    quant_tags = len(tags_globais)
-    print(f"Quantidade de tags globais: {quant_tags}")    
+    criar_conexao_e_inserir_tags_globais(tags_globais)
     
 main()
