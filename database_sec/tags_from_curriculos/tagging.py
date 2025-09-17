@@ -6,20 +6,26 @@ from dotenv import load_dotenv
 # Domínios temáticos disponíveis
 DOMINIOS = [
     "Ciência da Computação e Tecnologia",
+    "Ciência de Dados e Inteligência Artificial",
     "Educação e Ensino",
     "Saúde e Medicina",
     "Biologia e Ciências da Vida",
     "Química e Farmacologia",
-    "Engenharia e Indústria",
+    "Engenharias",
+    "Indústria e Produção",
+    "Astronomia",
     "Energia e Sustentabilidade",
     "Matemática e Estatística",
     "Física",
     "Ciências Sociais e Humanas",
+    "Psicologia",
+    "Ciências Agrárias",
     "Economia e Negócios",
     "Direito e Políticas Públicas",
     "Artes e Cultura",
-    "Ciência de Dados e Inteligência Artificial",
+    "Linguística e Letras",
     "Meio Ambiente e Ecologia",
+    "Ciências da Terra e Geociências"
 ]
 
 # Criar cliente OpenAI
