@@ -20,7 +20,8 @@ CREATE TABLE IF NOT EXISTS researcher_tags (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     updated_in TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-    name VARCHAR(100) NOT NULL UNIQUE
+    name VARCHAR(100) NOT NULL UNIQUE,
+    embedding VECTOR(1536)
 );
 
 CREATE TABLE IF NOT EXISTS researcher_tags_on_researchers (
