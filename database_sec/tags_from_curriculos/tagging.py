@@ -28,9 +28,7 @@ def criar_client() -> OpenAI:
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
     return client
 
-# Gerar tags de um chunk
-def generate_tags_from_chunk(client: OpenAI, chunk_text: str, column_name: str) -> list[str]:
-    prompt = f"""
+"""
     Gere entre 1 e 3 tags curtas, relevantes e SIGNIFICATIVAS para o seguinte texto da coluna '{column_name}':
     
     {chunk_text}
@@ -45,6 +43,26 @@ def generate_tags_from_chunk(client: OpenAI, chunk_text: str, column_name: str) 
     - Português, preferencialmente no singular.
     - Responda apenas com as tags separadas por vírgula.
     """
+
+# Gerar tags de um chunk
+def generate_tags_from_chunk(client: OpenAI, chunk_text: str, column_name: str) -> list[str]:
+    prompt = f"""
+    Gere entre 1 e 4 tags curtas, relevantes e SIGNIFICATIVAS para o seguinte texto da coluna '{column_name}':
+    
+    {chunk_text}
+    
+    Regras:
+    - Semânticas, podendo ser temas, áreas, métodos ou conceitos.
+    
+    - Gere de forma mais diversa possível, veja o exemplo:
+    - Ex de artigo.: 'A Critical Analysis Of The Covid-19 Hospitalization Network In Countries With Limited Resources' 
+    Possíveis tags do artigo: "Redes de Hospitalização", "COVID-19", "Desigualdades em Saúde", "Países de Baixa Renda"
+           
+    - Não use nomes de empresas, siglas soltas, códigos ou palavras genéricas sem contexto.
+    - Em português.
+    - Responda apenas com as tags separadas por vírgula.
+    """
+    
     response = client.chat.completions.create(
         model="gpt-4.1-mini",
         messages=[{"role": "user", "content": prompt}]
@@ -128,5 +146,5 @@ def visualize_tags(tags_por_pesquisador: dict, tags_globais: list[str]):
 
     print("\nTags globais:")
     quant_tags_globais = len(tags_globais)
-    print("Existem {quant_tags_globais} tags globais")
+    print(f"Existem {quant_tags_globais} tags globais")
     print(tags_globais)
