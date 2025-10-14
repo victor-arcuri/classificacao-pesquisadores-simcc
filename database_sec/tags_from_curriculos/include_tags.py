@@ -12,11 +12,11 @@ def criar_conexao_e_inserir_tags_globais(tags_globais: list[str]):
     try:
         load_dotenv()
 
-        usuario = os.getenv('CURRICULO_DB_USER')
-        senha = os.getenv('CURRICULO_DB_PASSWORD')
+        usuario = os.getenv('DB_USERNAME')
+        senha = os.getenv('DB_SENHA')
         host = 'localhost'
-        porta = os.getenv('CURRICULO_DB_PORT_HOST')
-        banco = os.getenv('CURRICULO_DB_NAME')
+        porta = os.getenv('DB_PORT_HOST')
+        banco = os.getenv('DB_NAME')
         
         connection_string = f'postgresql+psycopg2://{usuario}:{senha}@{host}:{porta}/{banco}'
         engine = create_engine(connection_string)
@@ -25,24 +25,31 @@ def criar_conexao_e_inserir_tags_globais(tags_globais: list[str]):
         sql = text("""
             INSERT INTO researcher_tags (name, embedding)
             VALUES (:name, :embedding)
-            ON CONFLICT (name) DO NOTHING
         """)
 
         dados = []
         embeddings_model = OpenAIEmbeddings()
-        for tag_name in tags_globais:
-            try:
-                vetores_embedding_tag = embeddings_model.embed_documents(tag_name)
-                embedding_tag = np.mean(vetores_embedding_tag, axis=0).tolist()
-                dados.append({"name": tag_name, "embedding": embedding_tag})
-            except Exception as e:
-                print("\n\033[91m Ocorreu um erro ao gerar os embeddings.\033[0m")
-                print(f"Erro: {e}")
-
-        with engine.begin() as conn:
-            conn.execute(sql, dados)  
         
-        print(f"Operação de inserção de tags concluída com sucesso!")
+        try:
+            # gera embeddings em batch
+            vetores = embeddings_model.embed_documents(tags_globais)  # retorna lista de vetores
+            for tag_name, vetor in zip(tags_globais, vetores):
+                try:
+                    dados.append({"name": tag_name, "embedding": np.array(vetor, dtype=float).tolist()})
+                except Exception as e:
+                    print(f"Erro ao processar embedding da tag '{tag_name}': {e}")
+
+            # insere os dados no banco
+            try:
+                with engine.begin() as conn:
+                    conn.execute(sql, dados)
+                print("Inserção das tags concluída com sucesso!")
+            except Exception as e:
+                print(f"Erro ao inserir os dados no banco: {e}")
+
+        except Exception as e:
+            print(f"Erro ao gerar embeddings: {e}")
+
 
     except Exception as e:
         print(f"Ocorreu um erro ao inserir as tags: {e}")

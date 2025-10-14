@@ -236,14 +236,18 @@ class TagCleanerAgent:
         for tag_group in groups:
             tags = [(tag["name"], tag["id"]) for tag in tag_group["tags"]]
             prompt = f"""
-                Você é um especialista em curadoria de dados. Sua tarefa é analisar um grupo de tags que representam áreas de estudo de pesquisadores, 
-                as quais foram agrupadas por similaridade matemática, e refinar este grupo.
+                Você é um taxonomista acadêmico. Sua tarefa é criar uma tag canônica para o seguinte grupo de tags de pesquisa: {tags}.
 
-                1.  Primeiro, analise a seguinte lista de tags no formato (nome da tag, id): {tags}
-                2.  Remova qualquer tag que seja um outlier ou que não se encaixe perfeitamente com o tema central do grupo.
-                3.  A partir da lista de tags refinada, escolha o nome mais claro, comum e representativo para servir como substitutivo para cada tag 
-                individualmente do grupo. O nome não deve ser longo e não muito abrangente nem genérico.
+                A tag canônica deve ser:
+                - Um nome de campo de estudo formal e específico (ex: "Engenharia de Software", não "Software").
+                - Clara na relação entre áreas (ex: "Tecnologia na Educação", não "Educação e Tecnologia").
+                - Concisa, mas não genérica.
+
+                Bons exemplos: "Ontologia", "Ciência de Dados", "Inteligência Artificial", "Gestão de TI", "Matemática Aplicada".
+
+                Responda APENAS com a tag final.
             """
+
             response = self.structured_llm.invoke(prompt)
             tag_group["name"] = response.group_name
             tag_group["tags"] = [tag for tag in tag_group["tags"] if tag["id"] not in response.removed_tags]
@@ -326,13 +330,13 @@ class TagCleanerAgent:
         return graph_builder.compile()
 
 def main():
-    usuario = os.getenv('CURRICULO_DB_USER')
-    senha = os.getenv('CURRICULO_DB_PASSWORD')
+    usuario = os.getenv('DB_USERNAME')
+    senha = os.getenv('DB_SENHA')
     host = 'localhost'
-    porta = os.getenv('CURRICULO_DB_PORT_HOST')
-    banco = os.getenv('CURRICULO_DB_NAME')
+    porta = os.getenv('DB_PORT_HOST')
+    banco = os.getenv('DB_NAME')
 
-    db_url = f"postgresql+psycopg2://{usuario}:{senha}@{host}:{porta}/{banco}"
+    db_url = f"postgresql://{usuario}:{senha}@{host}:{porta}/{banco}"
     logger = LogAgent()
     agent = TagCleanerAgent(db_url, logger)
     graph = agent.create_graph()

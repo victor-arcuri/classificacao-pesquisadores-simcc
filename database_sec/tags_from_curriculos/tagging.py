@@ -28,39 +28,17 @@ def criar_client() -> OpenAI:
     client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
     return client
 
-"""
-    Gere entre 1 e 3 tags curtas, relevantes e SIGNIFICATIVAS para o seguinte texto da coluna '{column_name}':
-    
-    {chunk_text}
-    
-    Regras:
-    - Semânticas, representando temas, áreas, métodos ou conceitos.
-    - Pode incluir termos específicos ou mais amplos relacionados.
-    - Ex.: "coronavírus" → também "biologia", "saúde pública".
-           "ensino inovador" → também "educação", "inovação".
-           "tomada de decisões" → também "negócios", "administração".
-    - Não use nomes de empresas, siglas soltas, códigos ou palavras genéricas sem contexto.
-    - Português, preferencialmente no singular.
-    - Responda apenas com as tags separadas por vírgula.
-    """
-
 # Gerar tags de um chunk
 def generate_tags_from_chunk(client: OpenAI, chunk_text: str, column_name: str) -> list[str]:
     prompt = f"""
-    Gere entre 1 a 2 tags curtas, relevantes e SIGNIFICATIVAS para o seguinte texto da coluna '{column_name}':
-    
-    {chunk_text}
-    
-    Regras:
-    - Semânticas, podendo ser temas, áreas, métodos ou conceitos.
-    
-    - Gere de forma mais diversa possível, veja o exemplo:
-    - Ex de artigo.: 'A Critical Analysis Of The Covid-19 Hospitalization Network In Countries With Limited Resources' 
-    Possíveis tags do artigo: "Redes de Hospitalização", "COVID-19", "Desigualdades em Saúde", "Países de Baixa Renda"
-           
-    - Não use nomes de empresas, siglas soltas, códigos ou palavras genéricas sem contexto.
-    - Em português.
-    - Responda apenas com as tags separadas por vírgula.
+        Extraia de 1 a 2 palavras-chave do seguinte texto da coluna '{column_name}':
+        {chunk_text}
+
+        Regras:
+        - Apenas conceitos, temas ou métodos presentes no texto.
+        - Sem siglas isoladas, nomes de empresas, códigos ou palavras genéricas.
+        - Em português.
+        - Responda somente com as tags, separadas por vírgula, sem explicações ou pontuação extra.
     """
     
     response = client.chat.completions.create(
@@ -73,12 +51,10 @@ def generate_tags_from_chunk(client: OpenAI, chunk_text: str, column_name: str) 
 # Filtrar tags por domínios
 def filtrar_tag_por_dominio(client: OpenAI, tag: str, dominios=DOMINIOS) -> str | None:
     prompt = f"""
-    Classifique a tag abaixo em um dos domínios listados.
-    Se não fizer sentido em nenhum, responda apenas 'DESCARTAR'.
-
-    Tag: "{tag}"
-    Domínios: {', '.join(dominios)}
+    Classifique a tag "{tag}" em um dos seguintes domínios: {', '.join(dominios)}.  
+    Se não se encaixar em nenhum, responda 'DESCARTAR'.
     """
+
     resp = client.chat.completions.create(
         model="gpt-4.1-mini",
         messages=[{"role": "user", "content": prompt}],
