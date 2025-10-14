@@ -11,20 +11,20 @@ services:
       - "${DB_PORT_HOST}:${DB_PORT_CONTAINER}"
     container_name: ${NOME_CONTAINER_DB}
 
-  curriculo_db:
-    restart: always
-    build:  
-      context: ./database_sec
-      dockerfile: curriculo.dockerfile
-    environment:
-      POSTGRES_USER: ${CURRICULO_DB_USER}
-      POSTGRES_PASSWORD: ${CURRICULO_DB_PASSWORD}
-      POSTGRES_DB: ${CURRICULO_DB_NAME}
-    volumes:
-      - curriculo_pgdata:/var/lib/postgresql/data
-    ports: 
-      - "${CURRICULO_DB_PORT_HOST}:${DB_PORT_CONTAINER}"
-    container_name: ${NOME_CONTAINER_CURRICULO_DB}
+  #curriculo_db:
+  #  restart: always
+  #  build:  
+  #    context: ./database_sec
+  #    dockerfile: curriculo.dockerfile
+  #  environment:
+  #    POSTGRES_USER: ${CURRICULO_DB_USER}
+  #    POSTGRES_PASSWORD: ${CURRICULO_DB_PASSWORD}
+  #    POSTGRES_DB: ${CURRICULO_DB_NAME}
+  #  volumes:
+  #    - curriculo_pgdata:/var/lib/postgresql/data
+  #  ports: 
+  #    - "${CURRICULO_DB_PORT_HOST}:${DB_PORT_CONTAINER}"
+  #  container_name: ${NOME_CONTAINER_CURRICULO_DB}
 
   front-end:
     depends_on: 
@@ -63,4 +63,4 @@ services:
 
 volumes:
   pgdata:
-  curriculo_pgdata:
+  #curriculo_pgdata:

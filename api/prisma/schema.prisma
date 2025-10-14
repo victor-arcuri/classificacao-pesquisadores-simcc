@@ -1497,6 +1497,7 @@ model researcher_tags {
   id            String                           @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
   created_at    DateTime                         @default(now()) @db.Timestamp(6)
   name          String?                          @db.VarChar(100)
+  embedding     Unsupported("vector(1536)")?
   search_vector Unsupported("tsvector")?         @default(dbgenerated("setweight(to_tsvector('portuguese'::regconfig, (COALESCE(name, ''::character varying))::text), 'A'::\"char\")"))
   researchers   researcher_tags_on_researchers[]
 
