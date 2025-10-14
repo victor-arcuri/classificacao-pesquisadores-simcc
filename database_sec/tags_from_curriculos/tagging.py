@@ -47,7 +47,7 @@ def criar_client() -> OpenAI:
 # Gerar tags de um chunk
 def generate_tags_from_chunk(client: OpenAI, chunk_text: str, column_name: str) -> list[str]:
     prompt = f"""
-    Gere entre 1 e 4 tags curtas, relevantes e SIGNIFICATIVAS para o seguinte texto da coluna '{column_name}':
+    Gere entre 1 a 2 tags curtas, relevantes e SIGNIFICATIVAS para o seguinte texto da coluna '{column_name}':
     
     {chunk_text}
     

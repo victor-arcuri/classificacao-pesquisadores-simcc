@@ -326,7 +326,13 @@ class TagCleanerAgent:
         return graph_builder.compile()
 
 def main():
-    db_url = os.environ["DB_URL"]
+    usuario = os.getenv('CURRICULO_DB_USER')
+    senha = os.getenv('CURRICULO_DB_PASSWORD')
+    host = 'localhost'
+    porta = os.getenv('CURRICULO_DB_PORT_HOST')
+    banco = os.getenv('CURRICULO_DB_NAME')
+
+    db_url = f"postgresql+psycopg2://{usuario}:{senha}@{host}:{porta}/{banco}"
     logger = LogAgent()
     agent = TagCleanerAgent(db_url, logger)
     graph = agent.create_graph()
@@ -335,6 +341,5 @@ def main():
 if __name__ == "__main__":
     dotenv.load_dotenv()
     Environment.load_llm_api_keys()
-    Environment.load_db_url()
     Environment.set_similarity_threshold() 
     main()
