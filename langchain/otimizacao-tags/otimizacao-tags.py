@@ -14,15 +14,73 @@ import json
 from datetime import datetime
 
 DAD_TAGS = [
-    "Ciências Exatas e da Terra",
-    "Ciências Biológicas",
-    "Engenharias",
-    "Ciências da Saúde",
-    "Ciências Agrárias",
-    "Ciências Sociais Aplicadas",
-    "Ciências Humanas",
-    "Linguística, Letras e Artes",
+    # Ciências e Conhecimento
+    "Filosofia", "Sociologia", "Antropologia", "Psicologia", "História", "Geografia",
+    "Educação", "Ciência Política", "Religião", "Ética",
+
+    # Ciências Exatas e Naturais
+    "Matemática", "Física", "Química", "Biologia", "Astronomia", "Geologia",
+    "Ecologia", "Meteorologia", "Oceanografia",
+
+    # Tecnologia e Computação
+    "Tecnologia", "Inteligência Artificial", "Computação", "Programação",
+    "Ciência de Dados", "Machine Learning", "Cibersegurança", "Robótica",
+    "Internet das Coisas", "Blockchain", "Realidade Virtual", "Engenharia de Software",
+    "Redes de Computadores",
+
+    # Negócios e Gestão
+    "Administração", "Gestão", "Empreendedorismo", "Marketing", "Finanças",
+    "Contabilidade", "Recursos Humanos", "Economia", "Logística",
+    "Inovação", "Planejamento Estratégico",
+
+    # Meio Ambiente e Sustentabilidade
+    "Sustentabilidade", "Energia Renovável", "Mudanças Climáticas",
+    "Conservação Ambiental", "Economia Verde", "Agricultura Sustentável",
+    "Gestão Ambiental", "ESG",
+
+    # Direito e Sociedade
+    "Direito", "Justiça", "Legislação", "Direitos Humanos",
+    "Políticas Públicas", "Cidadania", "Segurança Pública",
+
+    # Saúde e Bem-Estar
+    "Saúde", "Medicina", "Enfermagem", "Nutrição", "Psicologia da Saúde",
+    "Esportes", "Qualidade de Vida",
+
+    # Artes e Cultura
+    "Arte", "Música", "Teatro", "Cinema", "Fotografia", "Literatura",
+    "Cultura", "Design", "Moda", "Arquitetura",
+
+    # Comunicação e Mídia
+    "Comunicação", "Jornalismo", "Publicidade", "Relações Públicas",
+    "Mídias Digitais", "Redes Sociais", "Produção de Conteúdo", "Linguística",
+
+    # Engenharia e Indústria
+    "Engenharia", "Engenharia Civil", "Engenharia Elétrica", "Engenharia Mecânica",
+    "Engenharia de Produção", "Engenharia Química", "Indústria 4.0",
+    "Construção", "Manufatura",
+
+    # Ciência e Inovação Aplicada
+    "Pesquisa", "Inovação Tecnológica", "Desenvolvimento Científico",
+    "Startups", "Propriedade Intelectual",
+
+    # Global e Internacional
+    "Relações Internacionais", "Comércio Exterior", "Geopolítica",
+    "Cooperação Internacional",
+
+    # Sociedade e Cultura Contemporânea
+    "Diversidade", "Inclusão", "Gênero", "Juventude",
+    "Cultura Digital", "Comportamento",
+
+    # Educação e Formação
+    "Ensino", "Pedagogia", "Didática", "Educação a Distância",
+    "Formação Profissional", "Aprendizagem",
+
+    # Outros Tópicos Transversais
+    "Ética Profissional", "Sustentabilidade Empresarial",
+    "Transformação Digital", "Futuro do Trabalho",
+    "Cidades Inteligentes", "Mobilidade Urbana", "Ciência Aberta"
 ]
+
 
 class LogTag(BaseModel):
     """Interface base das tags do log"""
@@ -72,6 +130,8 @@ class Log:
                     } for tag in group["tags"]
                 ]
             }
+            if "dad_tags" in group:
+                formatted_group["dad_tags"] = group["dad_tags"]
             formatted_groups.append(formatted_group)
             
 
@@ -84,6 +144,10 @@ class RefinedGroup(BaseModel):
     """Representa a estrutura do output da classificação da LLM"""
     group_name: str = Field(description="O nome único que melhor representa o grupo de tags próximas")
     removed_tags: List[str] = Field(description="Uma lista com o ID de cada tag removida do grupo por não pertencer a ele")
+
+class DadTagClassification(BaseModel):
+    """Estrutura para a classificação de um grupo de tags em dad_tags."""
+    dad_tags: List[str] = Field(description="Uma lista de dad_tags correspondentes para o grupo de tags.")
 
 class State(TypedDict):
     """Estado passado para cada etapa do Grafo."""
@@ -146,6 +210,7 @@ class TagCleanerAgent:
         self.llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
         
         self.structured_llm = self.llm.with_structured_output(RefinedGroup)
+        self.dad_tag_classifier_llm = self.llm.with_structured_output(DadTagClassification)
         
         self.logger = logger;
         
@@ -271,6 +336,47 @@ class TagCleanerAgent:
 
         return {"tag_groups": groups}
         
+    def classify_tags_for_dad_tags(self, state: State):
+        """Classifica as tags em DAD ou não DAD"""
+        print("\n--- CLASSIFICAÇÃO DE TAGS EM DAD OU NÃO DAD  ---")
+        
+        groups = state["tag_groups"]
+
+        print(f'Total de {len(groups)} grupos de tags a serem classificados!')
+
+        for tag_group in groups:
+            # O nome do grupo já representa bem o grupo de tags
+            group_name = tag_group["name"]
+            prompt = f"""
+                Você é um taxonomista sênior e especialista em categorização de áreas de pesquisa. Sua tarefa é classificar a tag de pesquisa '{group_name}' dentro da lista de campos de conhecimento pré-definidos: {DAD_TAGS}.
+
+                **Instruções Rigorosas:**
+                1.  **Foco no Essencial:** Selecione APENAS os campos que representam a ÁREA CENTRAL e FUNDAMENTAL da tag. Evite campos que são apenas aplicações, ferramentas ou áreas relacionadas de forma indireta.
+                2.  **Hierarquia:** Pense na relação hierárquica. A tag '{group_name}' é um subcampo direto de qual campo da lista?
+
+                **Exemplos de Classificação Correta:**
+                - 'Energia Renovável' -> DEVE ser classificada em ['Sustentabilidade', 'Energia Renovável']. NÃO inclua 'Tecnologia' apenas porque usa tecnologia.
+                - 'Saúde Pública' -> DEVE ser classificada em ['Saúde', 'Saúde Pública', 'Políticas Públicas']. NÃO inclua 'Sociologia', pois é um campo relacionado, mas não a disciplina central.
+                - 'Modelagem Matemática' -> DEVE ser classificada em ['Matemática', 'Ciência de Dados']. NÃO inclua 'Tecnologia'.
+
+                Responda APENAS com os campos correspondentes da lista, com no máximo 3 campos.
+            """
+
+            response = self.dad_tag_classifier_llm.invoke(prompt)
+            
+            if len(response.dad_tags) > 1:
+                # Cria um dicionário com chaves dad_tag1, dad_tag2, etc.
+                dad_tag_dict = {f"dad_tag{i+1}": tag for i, tag in enumerate(response.dad_tags)}
+                tag_group["dad_tags"] = dad_tag_dict
+                print(f'O grupo \'{group_name}\' foi classificado em: {dad_tag_dict}')
+            else:
+                tag_group["dad_tags"] = response.dad_tags
+                print(f'O grupo \'{group_name}\' foi classificado em: {response.dad_tags}')
+
+
+        self.logger.currentLog.set_groups(groups).save_log()
+        return {"tag_groups": groups}
+
     def generate_embeddings_for_groups(self, state: State):
         """Gera os embeddings para os grupos de tags criados"""
 
@@ -292,10 +398,6 @@ class TagCleanerAgent:
 
         return {"tag_groups": groups}
     
-    def classify_tags_for_dad_tags(self, state: State):
-        """Classifica as tags em DAD ou não DAD"""
-        
-
     def remove_and_create_tags(self, state: State):
         """Remove as tags dos grupos, substituindo-as pela tag unificada de seu grupo"""
         print("\n--- INSERÇÃO DE NOVOS GRUPOS E REMOÇÃO DE TAGS REDUNDANTED  ---")
@@ -315,7 +417,7 @@ class TagCleanerAgent:
                         cursor.execute(f'DELETE FROM "public"."researcher_tags" WHERE id IN ({placeholders})', tag_ids)
                         for tag in tag_group["tags"]:
                             tag["removed"] = True
-        except Error as e:
+        except psycopg.Error as e:
             print(f'Erro de conexão: {e}')
             self.logger.currentLog.set_groups(groups).save_log()
 
@@ -330,13 +432,15 @@ class TagCleanerAgent:
         graph_builder.add_node("get_tags", self.get_all_tags_from_db)
         graph_builder.add_node("clean_tags", self.clean_and_group_tags)
         graph_builder.add_node("define_group_names", self.define_group_names)
+        graph_builder.add_node("classify_tags", self.classify_tags_for_dad_tags)
         graph_builder.add_node("generate_embeddings", self.generate_embeddings_for_groups)
         graph_builder.add_node("remove_and_create_tags", self.remove_and_create_tags)
 
         graph_builder.set_entry_point("get_tags")
         graph_builder.add_edge("get_tags", "clean_tags")
         graph_builder.add_edge("clean_tags", "define_group_names")
-        graph_builder.add_edge("define_group_names", "generate_embeddings")
+        graph_builder.add_edge("define_group_names", "classify_tags")
+        graph_builder.add_edge("classify_tags", "generate_embeddings")
         graph_builder.add_edge("generate_embeddings", "remove_and_create_tags")
         graph_builder.add_edge("remove_and_create_tags", END)
 
@@ -358,5 +462,5 @@ def main():
 if __name__ == "__main__":
     dotenv.load_dotenv()
     Environment.load_llm_api_keys()
-    Environment.set_similarity_threshold() 
+    Environment.set_similarity_threshold()
     main()
