@@ -5,21 +5,30 @@ from dotenv import load_dotenv
 
 # Domínios temáticos disponíveis
 DOMINIOS = [
-    "Ciência da Computação e Tecnologia",
+    "Ciência da Computação",
+    "Tecnologia da Informação",
     "Educação e Ensino",
-    "Saúde e Medicina",
-    "Biologia e Ciências da Vida",
-    "Química e Farmacologia",
-    "Engenharia e Indústria",
-    "Energia e Sustentabilidade",
-    "Matemática e Estatística",
+    "Saúde",
+    "Biologia",
+    "Ciências da Vida",
+    "Química",
+    "Farmacologia",
+    "Engenharias",
+    "Sustentabilidade",
+    "Matemática",
+    "Estatística",
     "Física",
-    "Ciências Sociais e Humanas",
+    "Ciências Sociais",
+    "Ciencias Humanas",
     "Economia e Negócios",
-    "Direito e Políticas Públicas",
-    "Artes e Cultura",
-    "Ciência de Dados e Inteligência Artificial",
-    "Meio Ambiente e Ecologia",
+    "Direito",
+    "Políticas Públicas",
+    "Artes",
+    "Cultura",
+    "Ciência de Dados",
+    "Inteligência Artificial",
+    "Meio Ambiente",
+    "Ecologia"
 ]
 
 # Criar cliente OpenAI
@@ -31,15 +40,21 @@ def criar_client() -> OpenAI:
 # Gerar tags de um chunk
 def generate_tags_from_chunk(client: OpenAI, chunk_text: str, column_name: str) -> list[str]:
     prompt = f"""
-        Extraia de 1 a 2 palavras-chave do seguinte texto da coluna '{column_name}':
-        {chunk_text}
+        Extraia de 1 a 2 tags de pesquisa do texto a seguir.
 
-        Regras:
-        - Apenas conceitos, temas ou métodos presentes no texto.
-        - Sem siglas isoladas, nomes de empresas, códigos ou palavras genéricas.
-        - Em português.
-        - Responda somente com as tags, separadas por vírgula, sem explicações ou pontuação extra.
-    """
+        Texto:
+        ---
+        {chunk_text}
+        ---
+
+        Diretrizes:
+        - Tags devem ser conceitos, áreas de conhecimento ou metodologias. Em português.
+        - Máximo de 3 palavras por tag.
+        - Evite: nomes, instituições, siglas e termos genéricos (ex: 'artigo', 'pesquisa').
+        - Bons exemplos: 'Tecnologia da Informação', 'Pesquisa Científica', 'Ciência da Computação', 'Robótica Educacional'.
+
+        Responda APENAS com as tags separadas por vírgula.
+        """
     
     response = client.chat.completions.create(
         model="gpt-4.1-mini",
@@ -91,6 +106,8 @@ def generate_tags_for_researcher(client: OpenAI, chunks_dict: dict) -> list[str]
         tempo_fim = time.time()
         print(f"Duração da coluna '{column_name}': {tempo_fim - tempo_inicio:.2f} seg")
     return list(tags)
+
+def classify_tags_for_dad_tags(client: OpenAI, tags: list[str]) -> dict[str, str]:
 
 # Pipeline principal
 def generate_tags_pipeline(client: OpenAI, pesquisadores: dict) -> tuple[dict, list[str]]:

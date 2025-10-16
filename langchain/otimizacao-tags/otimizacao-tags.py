@@ -13,6 +13,17 @@ import ast
 import json
 from datetime import datetime
 
+DAD_TAGS = [
+    "Ciências Exatas e da Terra",
+    "Ciências Biológicas",
+    "Engenharias",
+    "Ciências da Saúde",
+    "Ciências Agrárias",
+    "Ciências Sociais Aplicadas",
+    "Ciências Humanas",
+    "Linguística, Letras e Artes",
+]
+
 class LogTag(BaseModel):
     """Interface base das tags do log"""
     id: str
@@ -143,11 +154,9 @@ class TagCleanerAgent:
         self.db_url = db_url
 
         self.embeddings = embeddings
-
-        
+    
     def get_all_tags_from_db(self, state: State) -> Dict[str, List[Dict[str, Any]]] :
         """Busca todas as tags e seus embeddings no banco de dados."""
-        
         print("\n--- EXTRAÇÃO DE TAGS DO BANCO ---")
 
         print("Iniciando conexão com banco de dados...")
@@ -240,10 +249,13 @@ class TagCleanerAgent:
 
                 A tag canônica deve ser:
                 - Um nome de campo de estudo formal e específico (ex: "Engenharia de Software", não "Software").
-                - Clara na relação entre áreas (ex: "Tecnologia na Educação", não "Educação e Tecnologia").
-                - Concisa, mas não genérica.
+                - Concisa, com no máximo 3 palavras obrigatoriamente.
+                - Não misturem assuntos (ex: "Ciência de Dados" é aceitável, "Ciência de Dados e Análise Estatística" não é).
+                - SEJA GENERALISTA.
+                - Representativa de todas as tags do grupo.
 
-                Bons exemplos: "Ontologia", "Ciência de Dados", "Inteligência Artificial", "Gestão de TI", "Matemática Aplicada".
+                EXEMPLOS DE TAGS CANÔNICAS:
+                - "Ciência de Dados", "Inteligência Artificial", "Gestão de TI", "Matemática", "Epidemiologia", "Pesquisa Científica", "Saúde Pública".
 
                 Responda APENAS com a tag final.
             """
@@ -280,6 +292,10 @@ class TagCleanerAgent:
 
         return {"tag_groups": groups}
     
+    def classify_tags_for_dad_tags(self, state: State):
+        """Classifica as tags em DAD ou não DAD"""
+        
+
     def remove_and_create_tags(self, state: State):
         """Remove as tags dos grupos, substituindo-as pela tag unificada de seu grupo"""
         print("\n--- INSERÇÃO DE NOVOS GRUPOS E REMOÇÃO DE TAGS REDUNDANTED  ---")
@@ -305,9 +321,6 @@ class TagCleanerAgent:
 
         self.logger.currentLog.set_groups(groups).save_log()
         print("Inserção realizada com sucesso!")
-
-            
-        
 
     def create_graph(self):
         """Cria o grafo LangGraph com o fluxo de otimização."""
