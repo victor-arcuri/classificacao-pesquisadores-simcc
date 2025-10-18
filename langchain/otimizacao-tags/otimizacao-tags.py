@@ -86,7 +86,6 @@ DAD_TAGS = [
 
 ]
 
-
 class LogTag(BaseModel):
     """Interface base das tags do log"""
     id: str
@@ -159,6 +158,7 @@ class State(TypedDict):
 
     all_tags_data: List[Dict[str, Any]]
     tag_groups: List[Dict[str, Any]]
+    tags_not_in_groups: List[Dict[str, Any]]
     unique_dad_tags: List[str]
 
 
@@ -215,7 +215,7 @@ class TagCleanerAgent:
 
         self.llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
         
-        self.structured_llm = self.llm.with_structured_output(RefinedGroup)
+        self.structured_llm = self.llm.with_structured_output(RefinedGroup).bind(max_tokens=1024)
         self.dad_tag_classifier_llm = self.llm.with_structured_output(DadTagClassification)
         
         self.logger = logger;
@@ -301,10 +301,15 @@ class TagCleanerAgent:
         print(f'Agrupamento bem sucedido!')
         print(f'Formados {len(groups)} grupos de tags!')
 
-        # Coletar as tags que ficaram de fora dos grupos
+        # Coletar as tags que não foram agrupadas (isoladas)
+        grouped_tag_ids = set()
+        for group in groups:
+            for tag in group["tags"]:
+                grouped_tag_ids.add(tag["id"])
+
         tags_not_in_groups = []
         for tag in all_tags:
-            if tag["name"] not in groups["tags"]:
+            if tag["id"] not in grouped_tag_ids:
                 tags_not_in_groups.append(tag)
         
         self.logger.create_new_log(groups=groups).save_log()
@@ -320,25 +325,32 @@ class TagCleanerAgent:
 
         print(f'Total de {len(groups)} grupos de tags a serem limpados e nomeados!')
 
-        for tag_group in groups:
-            tags = [(tag["name"], tag["id"]) for tag in tag_group["tags"]]
+        prompts = []
+        for group in groups:
+            tags = [(tag["name"], tag["id"]) for tag in group["tags"]]
             prompt = f"""
-                Você é um taxonomista acadêmico. Sua tarefa é criar uma tag canônica para o seguinte grupo de tags de pesquisa: {tags}.
+                Você é um taxonomista acadêmico. Sua tarefa é analisar o seguinte grupo de tags de pesquisa, remover as que não pertencem e criar um nome canônico para o grupo.
+                Grupo de tags: {tags}
 
-                A tag canônica deve ser:
+                O nome canônico do grupo deve ser:
                 - Um nome de campo de estudo formal e específico (ex: "Engenharia de Software", não "Software").
                 - Concisa, com no máximo 3 palavras obrigatoriamente.
-                - Não misturem assuntos (ex: "Ciência de Dados" é aceitável, "Ciência de Dados e Análise Estatística" não é).
-                - SEJA GENERALISTA.
+                - Generalista o suficiente para abranger os conceitos centrais.
                 - Representativa de todas as tags do grupo.
 
-                EXEMPLOS DE TAGS CANÔNICAS:
-                - "Ciência de Dados", "Inteligência Artificial", "Gestão de TI", "Matemática", "Epidemiologia", "Pesquisa Científica", "Saúde Pública".
+                Instruções:
+                1.  Identifique o tema central do grupo.
+                2.  Crie um `group_name` que siga as regras acima.
+                3.  Liste em `removed_tags` os IDs de quaisquer tags que sejam outliers e não se encaixem no tema central do grupo. Se nenhuma tag precisar ser removida, retorne uma lista vazia.
 
-                Responda APENAS com a tag final.
+                Sua resposta DEVE ser um objeto JSON formatado.
             """
+            prompts.append(prompt)
 
-            response = self.structured_llm.invoke(prompt)
+        # método .batch() executa todas as chamadas de API em paralelo.
+        responses = self.structured_llm.batch(prompts)
+
+        for tag_group, response in zip(groups, responses):
             tag_group["name"] = response.group_name
             tag_group["tags"] = [tag for tag in tag_group["tags"] if tag["id"] not in response.removed_tags]
             print(f'Total de {len(tag_group["tags"])} tags unificadas na Tag \'{response.group_name}\'!')
@@ -347,7 +359,7 @@ class TagCleanerAgent:
 
         self.logger.currentLog.set_groups(groups).save_log()
 
-        return {"tag_groups": groups}
+        return {"tag_groups": groups, "tags_not_in_groups": state["tags_not_in_groups"]}
         
     def classify_tags_for_dad_tags(self, state: State):
         """Classifica as tags em DAD ou não DAD"""
@@ -361,41 +373,32 @@ class TagCleanerAgent:
 
         print(f'Total de {len(all_tags)} tags a serem classificados!')
         
-        for tag in all_tags:
-            # O nome do grupo já representa bem o grupo de tags
-            # Não se restringir ao nome do grupo apenas
-            # Ajeitar toda função aqui
-            tag_name = tag["name"]
+        for tag_group in all_tags:
+            tag_name = tag_group["name"]
             prompt = f"""
                 Você é um taxonomista sênior e especialista em categorização de áreas de pesquisa. Sua tarefa é classificar a tag de pesquisa '{tag_name}' dentro da lista de campos de conhecimento pré-definidos: {DAD_TAGS}.
 
                 **Instruções Rigorosas:**
                 1.  **Foco no Essencial:** Selecione APENAS os campos que representam a ÁREA CENTRAL e FUNDAMENTAL da tag. Evite campos que são apenas aplicações, ferramentas ou áreas relacionadas de forma indireta.
                 2.  **Hierarquia:** Pense na relação hierárquica. A tag '{tag_name}' é um subcampo direto de qual campo da lista?
-
+                
                 **Exemplos de Classificação Correta:**
                 - 'Energia Renovável' -> DEVE ser classificada em ['Sustentabilidade', 'Energia Renovável']. NÃO inclua 'Tecnologia' apenas porque usa tecnologia.
                 - 'Saúde Pública' -> DEVE ser classificada em ['Saúde', 'Saúde Pública', 'Políticas Públicas']. NÃO inclua 'Sociologia', pois é um campo relacionado, mas não a disciplina central.
                 - 'Modelagem Matemática' -> DEVE ser classificada em ['Matemática', 'Ciência de Dados']. NÃO inclua 'Tecnologia'.
-
+                
                 Responda APENAS com os campos correspondentes da lista, com no máximo 3 campos.
             """
 
             response = self.dad_tag_classifier_llm.invoke(prompt)
 
-            for tag in response.dad_tags:
-                all_dad_tags.add(tag)
+            for dad_tag in response.dad_tags:
+                all_dad_tags.add(dad_tag)
 
-            if len(response.dad_tags) > 1:
-                # Cria um dicionário com chaves dad_tag1, dad_tag2, etc.
-                dad_tag_dict = {f"dad_tag{i+1}": tag for i, tag in enumerate(response.dad_tags)}
-                tag["dad_tags"] = dad_tag_dict
-                print(f'A tag \'{tag_name}\' foi classificado em: {dad_tag_dict}')
-            else:
-                print("ERROOOO")
-                # Mantém como lista se tiver 0 ou 1 elemento
-                #tag["dad_tags"] = response.dad_tags 
-                #print(f'O grupo \'{group_name}\' foi classificado em: {response.dad_tags}')
+            # Cria um dicionário com chaves dad_tag1, dad_tag2, etc.
+            dad_tag_dict = {f"dad_tag{i+1}": tag for i, tag in enumerate(response.dad_tags)}
+            tag_group["dad_tags"] = dad_tag_dict
+            print(f'A tag \'{tag_name}\' foi classificada em: {dad_tag_dict if dad_tag_dict else "Nenhuma"}')
 
         self.logger.currentLog.set_groups(groups).save_log()
 
@@ -408,9 +411,9 @@ class TagCleanerAgent:
         return {"tag_groups": all_tags, "unique_dad_tags": list(all_dad_tags)}
 
     def generate_embeddings_for_groups(self, state: State):
-        """Gera os embeddings para os grupos de tags criados"""
+        """Gera os embeddings para todas as tags"""
 
-        print("\n--- GERAÇÃO DE EMBEDDINGS DOS GRUPOS DE TAGS UNIFICADAS  ---")
+        print("\n--- GERAÇÃO DE EMBEDDINGS DAS TAGS UNIFICADAS  ---")
         
         groups = state["tag_groups"]
 
