@@ -17,73 +17,59 @@ from datetime import datetime
 - inserir todas as tags (sem considerar hierarquia nenhuma também) depois de otimizado para todos os pesquisadores - OK
 - incluir tags que não foram agrupadas (isoladas) na tabela de tags - OK
 - modificar o schema para nova tabela de hierarquia e criar nova migration
-- inserir hierarquia de tags 
+- inserir hierarquia de tags - OK
 - criar condição para tags pais e filhas iguais
-- criar dicionários com chaves (tags_pais) com valores (tags_filhas) para facilitar inserção no banco
+- criar dicionários com chaves (tags_pais) com valores (tags_filhas) para facilitar inserção no banco - OK
+- biblioteca logging para logs mais robustos 
 '''
 
+# Lista "Pura" de Nível 1 (Disciplinas-Raiz)
+
 DAD_TAGS = [
-    # Ciências e Conhecimento
-    "Filosofia", "Sociologia", "Antropologia", "Psicologia", "História", "Geografia",
-    "Educação", "Ciência Política", "Religião", "Ética",
+    # Ciências Humanas e Sociais
+    "Filosofia", 
+    "Sociologia", 
+    "Antropologia", 
+    "Psicologia", 
+    "História", 
+    "Geografia",
+    "Educação", 
+    "Ciência Política", 
+    "Direito",
+    "Políticas Públicas",
+    "Economia",
+    "Administração", 
+    "Relações Internacionais",
 
     # Ciências Exatas e Naturais
-    "Matemática", "Física", "Química", "Biologia", "Astronomia", "Geologia",
-    "Ecologia", "Meteorologia", "Oceanografia",
+    "Matemática",
+    "Física", 
+    "Química", 
+    "Biologia", 
+    "Geologia", 
+    "Ecologia", 
+    "Sustentabilidade", 
+    
+    # Saúde
+    "Saúde",
+    "Medicina", 
+    "Enfermagem",
+    "Nutrição",
 
-    # Tecnologia e Computação
-    "Tecnologia", "Inteligência Artificial", "Computação", "Programação",
-    "Ciência de Dados", "Machine Learning", "Cibersegurança", "Robótica",
-    "Internet das Coisas", "Blockchain", "Realidade Virtual", "Engenharia de Software",
-    "Redes de Computadores",
+    # Tecnologia e Engenharia
+    "Computação", 
+    "Engenharia", 
+    "Tecnologia",
 
-    # Negócios e Gestão
-    "Administração", "Gestão", "Empreendedorismo", "Marketing", "Finanças",
-    "Contabilidade", "Recursos Humanos", "Economia", "Logística",
-    "Inovação", "Planejamento Estratégico",
-
-    # Meio Ambiente e Sustentabilidade
-    "Sustentabilidade", "Energia Renovável", "Mudanças Climáticas",
-    "Conservação Ambiental", "Economia Verde", "Agricultura Sustentável",
-    "Gestão Ambiental", "ESG",
-
-    # Direito e Sociedade
-    "Direito", "Justiça", "Legislação", "Direitos Humanos",
-    "Políticas Públicas", "Cidadania", "Segurança Pública",
-
-    # Saúde e Bem-Estar
-    "Saúde", "Medicina", "Enfermagem", "Nutrição", "Psicologia da Saúde",
-    "Esportes", "Qualidade de Vida",
-
-    # Artes e Cultura
-    "Arte", "Música", "Teatro", "Cinema", "Fotografia", "Literatura",
-    "Cultura", "Design", "Moda", "Arquitetura",
-
-    # Comunicação e Mídia
-    "Comunicação", "Jornalismo", "Publicidade", "Relações Públicas",
-    "Mídias Digitais", "Redes Sociais", "Produção de Conteúdo", "Linguística",
-
-    # Engenharia e Indústria
-    "Engenharia", "Engenharia Civil", "Engenharia Elétrica", "Engenharia Mecânica",
-    "Engenharia de Produção", "Engenharia Química", "Indústria 4.0",
-    "Construção", "Manufatura",
-
-    # Ciência e Inovação Aplicada
-    "Pesquisa", "Inovação Tecnológica", "Desenvolvimento Científico",
-    "Startups", "Propriedade Intelectual",
-
-    # Global e Internacional
-    "Relações Internacionais", "Comércio Exterior", "Geopolítica",
-    "Cooperação Internacional",
-
-    # Sociedade e Cultura Contemporânea
-    "Diversidade", "Inclusão", "Gênero", "Juventude",
-    "Cultura Digital", "Comportamento",
-
-    # Educação e Formação
-    "Ensino", "Pedagogia", "Didática", "Educação a Distância",
-    "Formação Profissional", "Aprendizagem",
-
+    # Artes e Comunicação
+    "Arte",
+    "Cultura", 
+    "Design", 
+    "Moda",
+    "Arquitetura",
+    "Literatura",
+    "Comunicação", 
+    "Linguística"
 ]
 
 class LogTag(BaseModel):
@@ -144,7 +130,6 @@ class Log:
                 formatted_group["dad_tags"] = group["dad_tags"]
             formatted_groups.append(formatted_group)
             
-
         log = LogSchema(groups=formatted_groups)
         json_string = log.model_dump_json(indent=4)
         with open(self.path, 'w', encoding='utf-8') as f:
@@ -167,6 +152,7 @@ class State(TypedDict):
     tag_groups: List[Dict[str, Any]]
     tags_not_in_groups: List[Dict[str, Any]]
     unique_dad_tags: List[str]
+    tag_name_to_id_map: Dict[str, str]
 
 class LogAgent():
     """Agente que regula a criação e manipulação de logs"""
@@ -448,27 +434,32 @@ class TagCleanerAgent:
         for tag in all_tags:
             tag_name = tag["name"]
             prompt = f"""
-                Você é um taxonomista sênior e especialista em categorização de áreas de pesquisa. Sua tarefa é classificar a tag de pesquisa '{tag_name}' dentro da lista de campos de conhecimento pré-definidos: {DAD_TAGS}.
+                Você é um taxonomista sênior e especialista em categorização de áreas de pesquisa. Sua tarefa é identificar a **disciplina-raiz** da tag de pesquisa '{tag_name}' dentre essas tags pré-definidas: {DAD_TAGS}.
 
-                **Instruções Rigorosas:**
-                1.  **Foco no Essencial:** Selecione APENAS os campos que representam a ÁREA CENTRAL e FUNDAMENTAL da tag. Evite campos que são apenas aplicações, ferramentas ou áreas relacionadas de forma indireta.
-                2.  **Hierarquia:** Pense na relação hierárquica. A tag '{tag_name}' é um subcampo direto de qual campo da lista?
+                **Instruções Extremamente Rigorosas:**
+                1.  **Identifique a Origem:** Sua principal tarefa é encontrar a **área-mãe** mais fundamental da qual a tag deriva. Se a tag é uma aplicação de uma ciência, priorize a ciência, não a aplicação.
+                2.  **Hierarquia Estrita:** Pense como um bibliotecário: em qual prateleira principal este livro pertence? A tag '{tag_name}' é um subcampo direto de qual campo da lista?
+                3.  **Seja Minimalista:** Retorne no máximo 2 campos. O primeiro deve ser a área-mãe. O segundo, opcional, só deve ser usado se a tag for intrinsecamente uma fusão de duas áreas fundamentais.
                 
                 **Exemplos de Classificação Correta:**
-                - 'Energia Renovável' -> DEVE ser classificada em ['Sustentabilidade', 'Energia Renovável']. NÃO inclua 'Tecnologia' apenas porque usa tecnologia.
-                - 'Saúde Pública' -> DEVE ser classificada em ['Saúde', 'Saúde Pública', 'Políticas Públicas']. NÃO inclua 'Sociologia', pois é um campo relacionado, mas não a disciplina central.
-                - 'Modelagem Matemática' -> DEVE ser classificada em ['Matemática', 'Ciência de Dados']. NÃO inclua 'Tecnologia'.
+                - Para a tag 'Teoria dos Jogos', a resposta DEVE ser apenas ['Matemática'], pois é sua disciplina de origem, mesmo que seja aplicada em 'Economia' e 'Ciência Política'.
+                - Para a tag 'Energia Renovável', a resposta DEVE ser ['Sustentabilidade', 'Engenharia'], pois combina conceitos de ambas as áreas de forma central. NÃO inclua 'Tecnologia' ou 'Ecologia' como campos separados.
+                - Para a tag 'Saúde Pública', a resposta DEVE ser ['Saúde', 'Políticas Públicas'], pois é a interseção direta desses dois campos.
+                - Para a tag 'Modelagem Matemática', a resposta DEVE ser ['Matemática']. 'Ciência de Dados' é uma aplicação, não a origem.
                 
-                Responda APENAS com os campos correspondentes da lista, com no máximo 3 campos.
+                Responda APENAS com os campos que estão **EXATAMENTE** como na lista fornecida. Não invente, modifique ou adicione nenhuma outra tag.
             """
 
             response = self.dad_tag_classifier_llm.invoke(prompt)
 
-            for dad_tag in response.dad_tags:
+            # Filtra a resposta para garantir que apenas tags da lista DAD_TAGS sejam usadas.
+            valid_dad_tags = [tag for tag in response.dad_tags if tag in DAD_TAGS]
+
+            for dad_tag in valid_dad_tags:
                 all_dad_tags.add(dad_tag)
 
             # Cria um dicionário com chaves dad_tag1, dad_tag2, etc.
-            dad_tag_dict = {f"dad_tag{i+1}": tag for i, tag in enumerate(response.dad_tags)}
+            dad_tag_dict = {f"dad_tag{i+1}": tag for i, tag in enumerate(valid_dad_tags)}
             tag["dad_tags"] = dad_tag_dict
             # Cada tag tem uma chave "dad_tags" que é um dicionário com as dad_tags classificadas para ela
             print(f'A tag \'{tag_name}\' foi classificada em: {dad_tag_dict if dad_tag_dict else "Nenhuma"}')
@@ -513,6 +504,7 @@ class TagCleanerAgent:
 
         print("Conectando com banco de dados...")
         all_tags = state["all_tags"]
+        tag_name_to_id_map = {}
         try:
             with psycopg.connect(self.db_url) as connection:
                 print("Conexão bem sucedida!")
@@ -523,8 +515,11 @@ class TagCleanerAgent:
                         with connection.transaction():
                             with connection.cursor() as cursor:
                                 print(f'Processando e inserindo a tag: \'{tag["name"]}\'')
-                                cursor.execute('INSERT INTO "public"."researcher_tags" (name, embedding) VALUES (%s, %s)', (tag["name"], tag["embedding"]))
+                                # Insere a nova tag e retorna seu ID
+                                cursor.execute('INSERT INTO "public"."researcher_tags" (name, embedding) VALUES (%s, %s) RETURNING id', (tag["name"], tag["embedding"]))
                                 tag["created"] = True
+                                new_tag_id = cursor.fetchone()[0]
+                                tag_name_to_id_map[tag["name"]] = new_tag_id
                                 
                                 # Se a tag for um grupo, remove as tags antigas que o compunham.
                                 tag_ids_to_remove = tuple([t.get("id") for t in tag.get("tags", []) if t.get("id")])
@@ -545,6 +540,39 @@ class TagCleanerAgent:
 
         self.logger.currentLog.set_tags(all_tags).save_log()
         print("Processamento de inserção e remoção no banco de dados finalizado!")
+        return {"all_tags": all_tags, "tag_name_to_id_map": tag_name_to_id_map}
+
+    def insert_hierarchy(self, state: State):
+        """Insere as relações de hierarquia na nova tabela."""
+        print("\n--- INSERÇÃO DA HIERARQUIA DE TAGS ---")
+        
+        all_tags = state["all_tags"]
+        tag_name_to_id_map = state.get("tag_name_to_id_map", {})
+        
+        if not tag_name_to_id_map:
+            print("Nenhum mapa de IDs de tag encontrado. Pulando inserção de hierarquia.")
+            return
+
+        hierarchy_relations = []
+        for tag in all_tags:
+            if "dad_tags" in tag and tag.get("name") in tag_name_to_id_map:
+                child_id = tag_name_to_id_map[tag["name"]]
+                for parent_name in tag["dad_tags"].values():
+                    if parent_name in tag_name_to_id_map:
+                        parent_id = tag_name_to_id_map[parent_name]
+                        if child_id != parent_id:
+                            hierarchy_relations.append((child_id, parent_id))
+
+        if not hierarchy_relations:
+            print("Nenhuma relação de hierarquia para inserir.")
+            return
+
+        print(f"Inserindo {len(hierarchy_relations)} relações de hierarquia...")
+        with psycopg.connect(self.db_url) as connection:
+            with connection.cursor() as cursor:
+                # Usa ON CONFLICT DO NOTHING para evitar erros de chave duplicada
+                cursor.executemany('INSERT INTO "public"."tags_hierarchy" (tag_id, parent_tag_id) VALUES (%s, %s) ON CONFLICT DO NOTHING', hierarchy_relations)
+        print("Inserção de hierarquia finalizada com sucesso!")
 
     def create_graph(self):
         """Cria o grafo LangGraph com o fluxo de otimização."""
@@ -557,6 +585,7 @@ class TagCleanerAgent:
         graph_builder.add_node("classify_tags", self.classify_tags_for_dad_tags)
         graph_builder.add_node("generate_embeddings", self.generate_embeddings_for_tags)
         graph_builder.add_node("remove_and_create_tags", self.remove_and_create_tags)
+        graph_builder.add_node("insert_hierarchy", self.insert_hierarchy)
 
         graph_builder.set_entry_point("get_tags")
         graph_builder.add_edge("get_tags", "clean_tags")
@@ -564,7 +593,8 @@ class TagCleanerAgent:
         graph_builder.add_edge("define_group_names", "classify_tags")
         graph_builder.add_edge("classify_tags", "generate_embeddings")
         graph_builder.add_edge("generate_embeddings", "remove_and_create_tags")
-        graph_builder.add_edge("remove_and_create_tags", END)
+        graph_builder.add_edge("remove_and_create_tags", "insert_hierarchy")
+        graph_builder.add_edge("insert_hierarchy", END)
 
         return graph_builder.compile()
 

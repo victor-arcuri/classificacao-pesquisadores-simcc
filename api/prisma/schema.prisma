@@ -1498,7 +1498,9 @@ model researcher_tags {
   created_at    DateTime                         @default(now()) @db.Timestamp(6)
   name          String?                          @db.VarChar(100)
   embedding     Unsupported("vector(1536)")?
-  search_vector Unsupported("tsvector")?         @default(dbgenerated("setweight(to_tsvector('portuguese'::regconfig, (COALESCE(name, ''::character varying))::text), 'A'::\"char\")"))
+  search_vector Unsupported("tsvector")?
+  children      tags_hierarchy[]                 @relation("ParentTag")
+  parents       tags_hierarchy[]                 @relation("ChildTag")
   researchers   researcher_tags_on_researchers[]
 
   @@index([name(ops: raw("gin_trgm_ops"))], type: Gin)

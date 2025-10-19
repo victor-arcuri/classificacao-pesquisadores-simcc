@@ -87,10 +87,10 @@ def generate_tags_from_column(client: ChatOpenAI, chunks: list[str], column_name
 
     # --- 2. Filtragem de Tags por Domínio em Lote ---
     domain_filtering_prompt = ChatPromptTemplate.from_template("""
-Classifique a tag "{tag}" em um dos seguintes domínios: {dominios}.
-Se a tag não se encaixar em nenhum dos domínios, responda APENAS com a palavra 'DESCARTAR'.
-Caso contrário, responda APENAS com o nome do domínio correspondente.
-""")
+    Classifique a tag "{tag}" em um dos seguintes domínios: {dominios}.
+    Se a tag não se encaixar em nenhum dos domínios, responda APENAS com a palavra 'DESCARTAR'.
+    Caso contrário, responda APENAS com o nome do domínio correspondente.
+    """)
     domain_filtering_chain = domain_filtering_prompt | client | StrOutputParser()
 
     unique_tags = list(all_generated_tags)
