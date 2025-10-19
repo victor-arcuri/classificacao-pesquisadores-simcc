@@ -1507,6 +1507,18 @@ model researcher_tags {
   @@schema("public")
 }
 
+model tags_hierarchy {
+  tag_id        String          @db.Uuid
+  parent_tag_id String          @db.Uuid
+
+  child         researcher_tags @relation("ChildTag", fields: [tag_id], references: [id], onDelete: Cascade)
+  parent        researcher_tags @relation("ParentTag", fields: [parent_tag_id], references: [id], onDelete: Cascade)
+
+  @@id([tag_id, parent_tag_id])
+  @@map("tags_hierarchy")
+  @@schema("public")
+}
+
 model researcher_tags_on_researchers {
   researcher_id String            @db.Uuid
   tag_id        String            @db.Uuid
