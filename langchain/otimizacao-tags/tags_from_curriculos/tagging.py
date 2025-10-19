@@ -1,7 +1,11 @@
 import os
 import time
-from openai import OpenAI
 from dotenv import load_dotenv
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+from rich.console import Console
+from rich.table import Table
 
 # Domínios temáticos disponíveis
 DOMINIOS = [
@@ -31,15 +35,26 @@ DOMINIOS = [
     "Ecologia"
 ]
 
-# Criar cliente OpenAI
-def criar_client() -> OpenAI:
+BATCH_SIZE = 50  # Define o tamanho do lote para as chamadas à API
+
+def criar_client() -> ChatOpenAI:
+    """Cria e configura o cliente ChatOpenAI."""
     load_dotenv()
-    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    client = ChatOpenAI(
+        model="gpt-4o-mini",
+        temperature=0,
+        api_key=os.getenv("OPENAI_API_KEY")
+    )
     return client
 
-# Gerar tags de um chunk
-def generate_tags_from_chunk(client: OpenAI, chunk_text: str, column_name: str) -> list[str]:
-    prompt = f"""
+def generate_tags_from_column(client: ChatOpenAI, chunks: list[str], column_name: str) -> list[str]:
+    """
+    Gera e filtra tags para uma lista de chunks de texto usando chamadas em lote (batch).
+    """
+    if not chunks:
+        return []
+
+    tag_extraction_prompt = ChatPromptTemplate.from_template("""
         Extraia de 1 a 2 tags de pesquisa do texto a seguir.
 
         Texto:
@@ -54,61 +69,60 @@ def generate_tags_from_chunk(client: OpenAI, chunk_text: str, column_name: str) 
         - Bons exemplos: 'Tecnologia da Informação', 'Pesquisa Científica', 'Ciência da Computação', 'Robótica Educacional'.
 
         Responda APENAS com as tags separadas por vírgula.
-        """
-    
-    response = client.chat.completions.create(
-        model="gpt-4.1-mini",
-        messages=[{"role": "user", "content": prompt}]
-    )
-    content = response.choices[0].message.content.strip()
-    return list(set([t.strip() for t in content.split(",") if t.strip()]))
+        """)
+    tag_extraction_chain = tag_extraction_prompt | client | StrOutputParser()
 
-# Filtrar tags por domínios
-def filtrar_tag_por_dominio(client: OpenAI, tag: str, dominios=DOMINIOS) -> str | None:
-    prompt = f"""
-    Classifique a tag "{tag}" em um dos seguintes domínios: {', '.join(dominios)}.  
-    Se não se encaixar em nenhum, responda 'DESCARTAR'.
-    """
+    all_generated_tags = set()
+    prompts = [{"chunk_text": chunk} for chunk in chunks]
 
-    resp = client.chat.completions.create(
-        model="gpt-4.1-mini",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0
-    )
-    classificacao = resp.choices[0].message.content.strip()
-    if classificacao.upper() == "DESCARTAR":
-        return None
-    return classificacao
+    for i in range(0, len(prompts), BATCH_SIZE):
+        batch = prompts[i:i + BATCH_SIZE]
+        responses = tag_extraction_chain.batch(batch, config={"max_concurrency": 5})
+        for response in responses:
+            tags = [tag.strip() for tag in response.split(',') if tag.strip()]
+            all_generated_tags.update(tags)
 
-# Gerar tags de uma coluna inteira
-def generate_tags_from_column(client: OpenAI, chunks: list[str], column_name: str) -> list[str]:
-    all_tags = set()
-    for chunk in chunks:
-        try:
-            tags = generate_tags_from_chunk(client, chunk, column_name)
-            for t in tags:
-                dominio = filtrar_tag_por_dominio(client, t)
-                if dominio:
-                    all_tags.add(t)
-        except Exception as e:
-            print(f"Erro ao gerar tags para chunk da coluna '{column_name}': {e}")
-    return list(all_tags)
+    if not all_generated_tags:
+        return []
+
+    # --- 2. Filtragem de Tags por Domínio em Lote ---
+    domain_filtering_prompt = ChatPromptTemplate.from_template("""
+Classifique a tag "{tag}" em um dos seguintes domínios: {dominios}.
+Se a tag não se encaixar em nenhum dos domínios, responda APENAS com a palavra 'DESCARTAR'.
+Caso contrário, responda APENAS com o nome do domínio correspondente.
+""")
+    domain_filtering_chain = domain_filtering_prompt | client | StrOutputParser()
+
+    unique_tags = list(all_generated_tags)
+    prompts = [{"tag": tag, "dominios": ", ".join(DOMINIOS)} for tag in unique_tags]
+    valid_tags = []
+
+    for i in range(0, len(prompts), BATCH_SIZE):
+        batch_prompts = prompts[i:i + BATCH_SIZE]
+        batch_tags = unique_tags[i:i + BATCH_SIZE]
+        responses = domain_filtering_chain.batch(batch_prompts, config={"max_concurrency": 5})
+        for tag, domain in zip(batch_tags, responses):
+            if "DESCARTAR" not in domain.upper():
+                valid_tags.append(tag)
+
+    return valid_tags
 
 # Gerar tags por pesquisador
-def generate_tags_for_researcher(client: OpenAI, chunks_dict: dict) -> list[str]:
+def generate_tags_for_researcher(client: ChatOpenAI, chunks_dict: dict) -> list[str]:
     tags = set()
     for column_name, chunks in chunks_dict.items():
         if column_name == "metadata":
             continue
         tempo_inicio = time.time()
+        print(f"  -> Gerando tags para a coluna '{column_name}' ({len(chunks)} chunks)...")
         column_tags = generate_tags_from_column(client, chunks, column_name)
         tags.update(column_tags)
         tempo_fim = time.time()
-        print(f"Duração da coluna '{column_name}': {tempo_fim - tempo_inicio:.2f} seg")
+        print(f"     Coluna '{column_name}' finalizada em {tempo_fim - tempo_inicio:.2f}s. {len(column_tags)} tags válidas encontradas.")
     return list(tags)
 
 # Pipeline principal
-def generate_tags_pipeline(client: OpenAI, pesquisadores: dict) -> tuple[dict, list[str]]:
+def generate_tags_pipeline(client: ChatOpenAI, pesquisadores: dict) -> tuple[dict, list[str]]:
     tags_por_pesquisador = {}
     i = 1
     for pesquisador, chunks_dict in pesquisadores.items():
@@ -121,7 +135,7 @@ def generate_tags_pipeline(client: OpenAI, pesquisadores: dict) -> tuple[dict, l
     tags_globais = set()
     for t_list in tags_por_pesquisador.values():
         for tag in t_list:
-            tags_globais.add(tag.strip())  
+            tags_globais.add(tag.strip())
     tags_globais = list(tags_globais)
 
     return tags_por_pesquisador, list(tags_globais)
@@ -129,13 +143,24 @@ def generate_tags_pipeline(client: OpenAI, pesquisadores: dict) -> tuple[dict, l
 
 # Visualização
 def visualize_tags(tags_por_pesquisador: dict, tags_globais: list[str]):
-    print("Tags por pesquisador:")
-    for p, tags in tags_por_pesquisador.items():
-        print(f"Pesquisador de ID:{p}\n\n {tags}")
-        quant_tags_pesquisador = len(tags)
-        print(f"Este pesquisador tem {quant_tags_pesquisador} tags")
+    console = Console()
+    console.print("\n[bold cyan]--- Tags Geradas por Pesquisador ---[/bold cyan]")
 
-    print("\nTags globais:")
+    table = Table(show_header=True, header_style="bold magenta", box=None)
+    table.add_column("ID do Pesquisador", style="cyan", no_wrap=True)
+    table.add_column("Nº de Tags", style="yellow")
+    table.add_column("Tags Geradas", style="green")
+
+    for p, tags in tags_por_pesquisador.items():
+        tags_str = ", ".join(sorted(tags))
+        table.add_row(str(p), str(len(tags)), tags_str)
+
+    console.print(table)
+
+    console.print("\n[bold cyan]--- Resumo das Tags Globais ---[/bold cyan]")
     quant_tags_globais = len(tags_globais)
-    print(f"Existem {quant_tags_globais} tags globais")
-    print(tags_globais)
+    console.print(f"Total de [bold yellow]{quant_tags_globais}[/bold yellow] tags únicas encontradas.")
+    
+    # Mostra uma amostra das tags globais
+    amostra_tags = sorted(tags_globais)[:20]
+    console.print("[dim]Amostra:[/dim]", ", ".join(amostra_tags) + ("..." if quant_tags_globais > 20 else ""))

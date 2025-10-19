@@ -55,7 +55,7 @@ def main():
     # Visualizar as embeddings no dataframe
     #visualizar_dataframe(df_final)
     
-    print("\n\n\n")
+    print("\n")
     
     # Criar conexão e popular o banco com embeddings
     #criar_conexao_e_inserir_dados(df_final)

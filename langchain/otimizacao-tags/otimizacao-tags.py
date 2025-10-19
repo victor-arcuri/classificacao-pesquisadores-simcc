@@ -353,10 +353,10 @@ class TagCleanerAgent:
                 **Exemplo de Resposta:**
                 - **Exemplo 1 (Grupo Coeso):**
                   - Tags de Entrada: `['Desenvolvimento de Software', 'Engenharia de Software Ágil', 'Testes de Software', 'Arquitetura de Microserviços']`
-                  - Resposta Esperada: `{ "group_name": "Engenharia de Software", "removed_tags": [] }`
+                  - Resposta Esperada: `{{ "group_name": "Engenharia de Software", "removed_tags": [] }}`
                 - **Exemplo 2 (Com Outlier):**
                   - Tags de Entrada: `['Inteligência Artificial', 'Redes Neurais', 'Aprendizado de Máquina', 'Culinária Francesa']`
-                  - Resposta Esperada: `{ "group_name": "Inteligência Artificial", "removed_tags": ["Culinária Francesa"] }`
+                  - Resposta Esperada: `{{ "group_name": "Inteligência Artificial", "removed_tags": ["Culinária Francesa"] }}`
 
                 Sua resposta DEVE ser um objeto JSON formatado.
             """
