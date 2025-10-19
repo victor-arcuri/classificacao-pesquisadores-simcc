@@ -117,6 +117,11 @@ class Log:
         self.groups = groups;
         return self;
     
+    def set_tags(self, tags: List[Dict[str, Any]]):
+        """Define as tags do log, tratando-as como grupos para salvamento."""
+        self.groups = tags
+        return self
+
     def save_log(self):
         """Atualiza os valores do log salvando em seu arquivo"""
         groups = self.groups
@@ -147,7 +152,7 @@ class Log:
 class RefinedGroup(BaseModel):
     """Representa a estrutura do output da classificação da LLM"""
     group_name: str = Field(description="O nome único que melhor representa o grupo de tags próximas")
-    removed_tags: List[str] = Field(description="Uma lista com o ID de cada tag removida do grupo por não pertencer a ele")
+    removed_tags: List[str] = Field(description="Uma lista com o NOME de cada tag removida do grupo por não pertencer a ele")
 
 class DadTagClassification(BaseModel):
     """Estrutura para a classificação de um grupo de tags em dad_tags."""
@@ -156,11 +161,11 @@ class DadTagClassification(BaseModel):
 class State(TypedDict):
     """Estado passado para cada etapa do Grafo."""
 
-    all_tags_data: List[Dict[str, Any]]
+    all_tags: List[Dict[str, Any]]
+    all_raw_tags: List[Dict[str, Any]]
     tag_groups: List[Dict[str, Any]]
     tags_not_in_groups: List[Dict[str, Any]]
     unique_dad_tags: List[str]
-
 
 class LogAgent():
     """Agente que regula a criação e manipulação de logs"""
@@ -215,7 +220,7 @@ class TagCleanerAgent:
 
         self.llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
         
-        self.structured_llm = self.llm.with_structured_output(RefinedGroup).bind(max_tokens=1024)
+        self.structured_llm = self.llm.with_structured_output(RefinedGroup)
         self.dad_tag_classifier_llm = self.llm.with_structured_output(DadTagClassification)
         
         self.logger = logger;
@@ -254,7 +259,7 @@ class TagCleanerAgent:
         print("Extração bem sucedida!")
         print(f"Encontradas {len(all_tags)} tags para processamento.")
 
-        return {"all_tags_data": all_tags}
+        return {"all_raw_tags": all_tags}
 
     def clean_and_group_tags(self, state: State) -> Dict[str, List[Dict[str, Any]]]:
         """Agrupa tags similares"""
@@ -263,7 +268,7 @@ class TagCleanerAgent:
 
         SIMILARITY_THRESHOLD = float(os.environ["SIMILARITY_THRESHOLD"]);
 
-        all_tags = state["all_tags_data"]
+        all_tags = state["all_raw_tags"]
         groups = []
         processed_tags = set()
         print(f'Verificando {len(all_tags)} tags...')
@@ -327,10 +332,12 @@ class TagCleanerAgent:
 
         prompts = []
         for group in groups:
-            tags = [(tag["name"], tag["id"]) for tag in group["tags"]]
+            # Otimização: Envia apenas os nomes das tags para economizar tokens.
+            # O modelo retornará os nomes das tags a serem removidas.
+            tag_names = [tag["name"] for tag in group["tags"]]
             prompt = f"""
                 Você é um taxonomista acadêmico. Sua tarefa é analisar o seguinte grupo de tags de pesquisa, remover as que não pertencem e criar um nome canônico para o grupo.
-                Grupo de tags: {tags}
+                Grupo de tags (apenas nomes): {tag_names}
 
                 O nome canônico do grupo deve ser:
                 - Um nome de campo de estudo formal e específico (ex: "Engenharia de Software", não "Software").
@@ -341,18 +348,31 @@ class TagCleanerAgent:
                 Instruções:
                 1.  Identifique o tema central do grupo.
                 2.  Crie um `group_name` que siga as regras acima.
-                3.  Liste em `removed_tags` os IDs de quaisquer tags que sejam outliers e não se encaixem no tema central do grupo. Se nenhuma tag precisar ser removida, retorne uma lista vazia.
+                3.  Liste em `removed_tags` os NOMES de quaisquer tags que sejam outliers e não se encaixem no tema central do grupo. Se nenhuma tag precisar ser removida, retorne uma lista vazia.
 
                 Sua resposta DEVE ser um objeto JSON formatado.
             """
             prompts.append(prompt)
 
-        # método .batch() executa todas as chamadas de API em paralelo.
-        responses = self.structured_llm.batch(prompts)
+        # O método .batch() executa todas as chamadas de API em paralelo.
+        # Usamos um try-except para lidar com grupos muito grandes que podem exceder o limite de tokens.
+        try:
+            # Tentativa inicial com um limite de tokens razoável para eficiência.
+            print("Executando nomeação em lote com limite de 4096 tokens...")
+            responses = self.structured_llm.with_config({"max_concurrency": 5}).batch(prompts, max_tokens=4096)
+        except Exception as e:
+            # Se a tentativa inicial falhar (provavelmente por limite de tokens),
+            # tentamos novamente com um limite muito maior como fallback.
+            print(f"Falha na primeira tentativa ({e}). Tentando novamente com limite de 8192 tokens...")
+            responses = self.structured_llm.with_config({"max_concurrency": 5}).batch(prompts, max_tokens=8192)
 
         for tag_group, response in zip(groups, responses):
+            # Mapeia os nomes das tags removidas de volta para seus IDs.
+            tag_name_to_id_map = {tag["name"]: tag["id"] for tag in tag_group["tags"]}
+            removed_ids = {tag_name_to_id_map[name] for name in response.removed_tags if name in tag_name_to_id_map}
+
             tag_group["name"] = response.group_name
-            tag_group["tags"] = [tag for tag in tag_group["tags"] if tag["id"] not in response.removed_tags]
+            tag_group["tags"] = [tag for tag in tag_group["tags"] if tag["id"] not in removed_ids]
             print(f'Total de {len(tag_group["tags"])} tags unificadas na Tag \'{response.group_name}\'!')
         
         print("Limpeza e nomeação bem sucedidas!")
@@ -367,14 +387,19 @@ class TagCleanerAgent:
         
         groups = state["tag_groups"][:] # Copia a lista para evitar modificar a original diretamente no loop
         tags_not_in_groups = state["tags_not_in_groups"][:]
-        all_tags = groups + [{"name": tag["name"], "tags": [tag]} for tag in tags_not_in_groups]
+        
+        # Garante que todas as tags (agrupadas, isoladas e pais) tenham uma estrutura consistente.
+        all_tags = groups + [
+            {"name": tag["name"], "embedding": "", "created": False, "tags": [tag]} 
+            for tag in tags_not_in_groups
+        ]
 
         all_dad_tags = set()
 
         print(f'Total de {len(all_tags)} tags a serem classificados!')
         
-        for tag_group in all_tags:
-            tag_name = tag_group["name"]
+        for tag in all_tags:
+            tag_name = tag["name"]
             prompt = f"""
                 Você é um taxonomista sênior e especialista em categorização de áreas de pesquisa. Sua tarefa é classificar a tag de pesquisa '{tag_name}' dentro da lista de campos de conhecimento pré-definidos: {DAD_TAGS}.
 
@@ -397,7 +422,8 @@ class TagCleanerAgent:
 
             # Cria um dicionário com chaves dad_tag1, dad_tag2, etc.
             dad_tag_dict = {f"dad_tag{i+1}": tag for i, tag in enumerate(response.dad_tags)}
-            tag_group["dad_tags"] = dad_tag_dict
+            tag["dad_tags"] = dad_tag_dict
+            # Cada tag tem uma chave "dad_tags" que é um dicionário com as dad_tags classificadas para ela
             print(f'A tag \'{tag_name}\' foi classificada em: {dad_tag_dict if dad_tag_dict else "Nenhuma"}')
 
         self.logger.currentLog.set_groups(groups).save_log()
@@ -405,79 +431,60 @@ class TagCleanerAgent:
         # Adiciona as dad_tags recém-descobertas à lista de todas as tags
         # para que elas também possam ter seus embeddings gerados e serem inseridas no banco.
         for dad_tag_name in all_dad_tags:
-            all_tags.append({"name": dad_tag_name, "tags": []}) # Adiciona como se fosse um novo grupo/tag isolada
+            # Adiciona como se fosse um novo grupo/tag isolada, mantendo a estrutura.
+            all_tags.append(
+                {"name": dad_tag_name, "embedding": "", "created": False, "tags": []}
+            )
 
         print(f"\nTotal de {len(all_dad_tags)} dad_tags únicas encontradas.")
-        return {"tag_groups": all_tags, "unique_dad_tags": list(all_dad_tags)}
+        return {"all_tags": all_tags, "unique_dad_tags": list(all_dad_tags)}
 
-    def generate_embeddings_for_groups(self, state: State):
+    def generate_embeddings_for_tags(self, state: State):
         """Gera os embeddings para todas as tags"""
 
         print("\n--- GERAÇÃO DE EMBEDDINGS DAS TAGS UNIFICADAS  ---")
         
-        groups = state["tag_groups"]
+        tags = state["all_tags"]
 
-        print(f'Total de {len(groups)} grupos de tags a gerar embeddings!')
+        print(f'Total de {len(tags)} tags a gerar embeddings!')
 
-        group_names = [group["name"] for group in groups]
-        group_embeddings = self.embeddings.embed_documents(group_names)
+        tag_names = [tag["name"] for tag in tags]
+        tag_embeddings = self.embeddings.embed_documents(tag_names)
 
-        for i, group in enumerate(groups):
-            group['embedding'] = str(group_embeddings[i])
+        for i, tag in enumerate(tags):
+            tag['embedding'] = str(tag_embeddings[i])
         
         print(f'Geração de embeddings finalizada com sucesso!')
 
-        self.logger.currentLog.set_groups(groups).save_log()
+        self.logger.currentLog.set_tags(tags).save_log()
 
-        return {"tag_groups": groups}
+        return {"all_tags": tags}
 
-    def insert_dad_tags(self, state: State):
-        """Insere as DAD tags que ainda não existem no banco de dados."""
-        print("\n--- INSERÇÃO DE DAD TAGS NO BANCO ---")
-        dad_tags = state["unique_dad_tags"]
-        if not dad_tags:
-            print("Nenhuma DAD tag para inserir.")
-            return
-
-        print(f"Tentando inserir {len(dad_tags)} DAD tags únicas...")
-        
-        dad_tags_embeddings = self.embeddings.embed_documents(dad_tags)
-
-        try:
-            with psycopg.connect(self.db_url) as connection:
-                print("Conexão bem sucedida!")
-                with connection.cursor() as cursor:
-                    sql = 'INSERT INTO "public"."researcher_tags" (name, embedding) VALUES (%s, %s) ON CONFLICT(name) DO NOTHING'
-                    args_list = [(name, str(embedding)) for name, embedding in zip(dad_tags, dad_tags_embeddings)]
-                    cursor.executemany(sql, args_list)
-                    print(f"{cursor.rowcount} novas DAD tags foram inseridas.")
-        except psycopg.Error as e:
-            print(f'Erro de conexão ou inserção: {e}')
-    
     def remove_and_create_tags(self, state: State):
-        """Remove as tags dos grupos, substituindo-as pela tag unificada de seu grupo"""
-        print("\n--- INSERÇÃO DE NOVOS GRUPOS E REMOÇÃO DE TAGS REDUNDANTED  ---")
+        """Remove as tags dos grupos, substituindo-as pela tag unificada de seu grupo, junto a tags dad_tags e tags isoladas."""
+        print("\n--- INSERÇÃO DE NOVOS GRUPOS, REMOÇÃO DE TAGS REDUNDANTED, E TAGS ISOLADAS E DAD TAGS ---")
 
         print("Conectando com banco de dados...")
-        groups = state["tag_groups"]
+        tags = state["all_tags"]
         try:
             with psycopg.connect(self.db_url) as connection:
                 print("Conexão bem sucedida!")
                 with connection.cursor() as cursor:
-                    for tag_group in groups:
-                        print(f'Inserindo e removendo tags do grupo \'{tag_group["name"]}\'')
-                        tag_ids = tuple([tag["id"] for tag in tag_group["tags"]])
-                        cursor.execute('INSERT INTO "public"."researcher_tags" (name, embedding) VALUES (%s, %s)', (tag_group["name"], tag_group["embedding"]))
-                        tag_group["created"] = True
-                        placeholders = ', '.join(['%s'] * len(tag_ids))
-                        cursor.execute(f'DELETE FROM "public"."researcher_tags" WHERE id IN ({placeholders})', tag_ids)
-                        for tag in tag_group["tags"]:
-                            tag["removed"] = True
+                    for tag in tags:
+                        print(f'Inserindo e removendo tags do grupo \'{tag["name"]}\'')
+                        tag_ids = tuple([tag["id"] for tag in tag["tags"]])
+                        cursor.execute('INSERT INTO "public"."researcher_tags" (name, embedding) VALUES (%s, %s)', (tag["name"], tag["embedding"]))
+                        tag["created"] = True
+                        if tag_ids:
+                            placeholders = ', '.join(['%s'] * len(tag_ids))
+                            cursor.execute(f'DELETE FROM "public"."researcher_tags" WHERE id IN ({placeholders})', tag_ids)
+                            for sub_tag in tag["tags"]:
+                                sub_tag["removed"] = True
         except psycopg.Error as e:
             print(f'Erro de conexão: {e}')
-            self.logger.currentLog.set_groups(groups).save_log()
+            self.logger.currentLog.set_tags(tags).save_log()
 
-        self.logger.currentLog.set_groups(groups).save_log()
+        self.logger.currentLog.set_tags(tags).save_log()
         print("Inserção realizada com sucesso!")
 
     def create_graph(self):
@@ -489,15 +496,13 @@ class TagCleanerAgent:
         graph_builder.add_node("clean_tags", self.clean_and_group_tags)
         graph_builder.add_node("define_group_names", self.define_group_names)
         graph_builder.add_node("classify_tags", self.classify_tags_for_dad_tags)
-        graph_builder.add_node("insert_dad_tags", self.insert_dad_tags)
-        graph_builder.add_node("generate_embeddings", self.generate_embeddings_for_groups)
+        graph_builder.add_node("generate_embeddings", self.generate_embeddings_for_tags)
         graph_builder.add_node("remove_and_create_tags", self.remove_and_create_tags)
 
         graph_builder.set_entry_point("get_tags")
         graph_builder.add_edge("get_tags", "clean_tags")
         graph_builder.add_edge("clean_tags", "define_group_names")
         graph_builder.add_edge("define_group_names", "classify_tags")
-        graph_builder.add_edge("classify_tags", "insert_dad_tags")
         graph_builder.add_edge("classify_tags", "generate_embeddings")
         graph_builder.add_edge("generate_embeddings", "remove_and_create_tags")
         graph_builder.add_edge("remove_and_create_tags", END)
