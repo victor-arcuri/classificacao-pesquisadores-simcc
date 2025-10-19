@@ -350,6 +350,14 @@ class TagCleanerAgent:
                 2.  Crie um `group_name` que siga as regras acima.
                 3.  Liste em `removed_tags` os NOMES de quaisquer tags que sejam outliers e não se encaixem no tema central do grupo. Se nenhuma tag precisar ser removida, retorne uma lista vazia.
 
+                **Exemplo de Resposta:**
+                - **Exemplo 1 (Grupo Coeso):**
+                  - Tags de Entrada: `['Desenvolvimento de Software', 'Engenharia de Software Ágil', 'Testes de Software', 'Arquitetura de Microserviços']`
+                  - Resposta Esperada: `{ "group_name": "Engenharia de Software", "removed_tags": [] }`
+                - **Exemplo 2 (Com Outlier):**
+                  - Tags de Entrada: `['Inteligência Artificial', 'Redes Neurais', 'Aprendizado de Máquina', 'Culinária Francesa']`
+                  - Resposta Esperada: `{ "group_name": "Inteligência Artificial", "removed_tags": ["Culinária Francesa"] }`
+
                 Sua resposta DEVE ser um objeto JSON formatado.
             """
             prompts.append(prompt)
@@ -365,21 +373,30 @@ class TagCleanerAgent:
             # tentamos novamente com um limite muito maior como fallback.
             print(f"Falha na primeira tentativa ({e}). Tentando novamente com limite de 8192 tokens...")
             responses = self.structured_llm.with_config({"max_concurrency": 5}).batch(prompts, max_tokens=8192)
-
+        
+        tags_not_in_groups = state["tags_not_in_groups"][:]
+        
         for tag_group, response in zip(groups, responses):
             # Mapeia os nomes das tags removidas de volta para seus IDs.
             tag_name_to_id_map = {tag["name"]: tag["id"] for tag in tag_group["tags"]}
             removed_ids = {tag_name_to_id_map[name] for name in response.removed_tags if name in tag_name_to_id_map}
 
+            # Captura as tags que foram removidas para tratá-las como isoladas
+            removed_tags_objects = [tag for tag in tag_group["tags"] if tag["id"] in removed_ids]
+            if removed_tags_objects:
+                print(f'  -> {len(removed_tags_objects)} tags foram removidas do grupo e serão tratadas como isoladas.')
+                tags_not_in_groups.extend(removed_tags_objects)
+
+            # Atualiza o grupo com o novo nome e a lista de tags limpa
             tag_group["name"] = response.group_name
             tag_group["tags"] = [tag for tag in tag_group["tags"] if tag["id"] not in removed_ids]
             print(f'Total de {len(tag_group["tags"])} tags unificadas na Tag \'{response.group_name}\'!')
         
         print("Limpeza e nomeação bem sucedidas!")
 
-        self.logger.currentLog.set_groups(groups).save_log()
+        self.logger.currentLog.set_groups(groups).save_log() # O log reflete os grupos após a limpeza
 
-        return {"tag_groups": groups, "tags_not_in_groups": state["tags_not_in_groups"]}
+        return {"tag_groups": groups, "tags_not_in_groups": tags_not_in_groups}
         
     def classify_tags_for_dad_tags(self, state: State):
         """Classifica as tags em DAD ou não DAD"""
@@ -465,27 +482,39 @@ class TagCleanerAgent:
         print("\n--- INSERÇÃO DE NOVOS GRUPOS, REMOÇÃO DE TAGS REDUNDANTED, E TAGS ISOLADAS E DAD TAGS ---")
 
         print("Conectando com banco de dados...")
-        tags = state["all_tags"]
+        all_tags = state["all_tags"]
         try:
             with psycopg.connect(self.db_url) as connection:
                 print("Conexão bem sucedida!")
-                with connection.cursor() as cursor:
-                    for tag in tags:
-                        print(f'Inserindo e removendo tags do grupo \'{tag["name"]}\'')
-                        tag_ids = tuple([tag["id"] for tag in tag["tags"]])
-                        cursor.execute('INSERT INTO "public"."researcher_tags" (name, embedding) VALUES (%s, %s)', (tag["name"], tag["embedding"]))
-                        tag["created"] = True
-                        if tag_ids:
-                            placeholders = ', '.join(['%s'] * len(tag_ids))
-                            cursor.execute(f'DELETE FROM "public"."researcher_tags" WHERE id IN ({placeholders})', tag_ids)
-                            for sub_tag in tag["tags"]:
-                                sub_tag["removed"] = True
+                # Processa cada tag/grupo em sua própria transação para maior resiliência.
+                for tag in all_tags:
+                    try:
+                        # Inicia uma transação para esta unidade de trabalho.
+                        with connection.transaction():
+                            with connection.cursor() as cursor:
+                                print(f'Processando e inserindo a tag: \'{tag["name"]}\'')
+                                cursor.execute('INSERT INTO "public"."researcher_tags" (name, embedding) VALUES (%s, %s)', (tag["name"], tag["embedding"]))
+                                tag["created"] = True
+                                
+                                # Se a tag for um grupo, remove as tags antigas que o compunham.
+                                tag_ids_to_remove = tuple([t.get("id") for t in tag.get("tags", []) if t.get("id")])
+                                if tag_ids_to_remove:
+                                    placeholders = ', '.join(['%s'] * len(tag_ids_to_remove))
+                                    cursor.execute(f'DELETE FROM "public"."researcher_tags" WHERE id IN ({placeholders})', tag_ids_to_remove)
+                                    print(f'  -> Removidas {len(tag_ids_to_remove)} tags antigas.')
+                                    for sub_tag in tag["tags"]:
+                                        sub_tag["removed"] = True
+                    except psycopg.Error as e:
+                        print(f'Erro ao processar a tag \'{tag["name"]}\': {e}. Pulando para a próxima.')
+                        tag["created"] = False # Marca como falha no log
+                        # A transação para este item será revertida automaticamente.
+
         except psycopg.Error as e:
             print(f'Erro de conexão: {e}')
-            self.logger.currentLog.set_tags(tags).save_log()
+            self.logger.currentLog.set_tags(all_tags).save_log()
 
-        self.logger.currentLog.set_tags(tags).save_log()
-        print("Inserção realizada com sucesso!")
+        self.logger.currentLog.set_tags(all_tags).save_log()
+        print("Processamento de inserção e remoção no banco de dados finalizado!")
 
     def create_graph(self):
         """Cria o grafo LangGraph com o fluxo de otimização."""

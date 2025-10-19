@@ -107,8 +107,6 @@ def generate_tags_for_researcher(client: OpenAI, chunks_dict: dict) -> list[str]
         print(f"Duração da coluna '{column_name}': {tempo_fim - tempo_inicio:.2f} seg")
     return list(tags)
 
-def classify_tags_for_dad_tags(client: OpenAI, tags: list[str]) -> dict[str, str]:
-
 # Pipeline principal
 def generate_tags_pipeline(client: OpenAI, pesquisadores: dict) -> tuple[dict, list[str]]:
     tags_por_pesquisador = {}
