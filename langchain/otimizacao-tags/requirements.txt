@@ -20,6 +20,7 @@ pandas>=2.0.0
 pydantic>=2.0.0
 python-dotenv>=1.0.0
 tqdm>=4.0.0
+scikit-learn==1.5.2
 
 # Utilitários de linha de comando e visualização
 ipython>=8.0.0

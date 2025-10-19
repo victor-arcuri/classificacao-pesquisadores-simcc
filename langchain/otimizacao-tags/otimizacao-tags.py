@@ -14,10 +14,10 @@ import json
 from datetime import datetime
 
 ''' 
-- inserir todas as tags (sem considerar hierarquia nenhuma também) depois de otimizado para todos os pesquisadores
-- incluir relação de todas as tags para todos os pesquisadores (sem considerar hierarquia nenhuma, antes ou depois da otimização? como quando vou para otimização
-não tenho mais o ID do pesquisador, então poderia ser antes e limpar os ids de tags que não estivessem mais lá?)
-- incluir tags que não foram agrupadas (isoladas) na tabela de tags
+- inserir todas as tags (sem considerar hierarquia nenhuma também) depois de otimizado para todos os pesquisadores - OK
+- incluir tags que não foram agrupadas (isoladas) na tabela de tags - OK
+- modificar o schema para nova tabela de hierarquia e criar nova migration
+- inserir hierarquia de tags 
 - criar condição para tags pais e filhas iguais
 - criar dicionários com chaves (tags_pais) com valores (tags_filhas) para facilitar inserção no banco
 '''
@@ -129,16 +129,17 @@ class Log:
         for group in groups:
             formatted_group = {
                 "name": group["name"],
-                "embedding": group["embedding"],
-                "created": group["created"],
-                "tags": [
-                    {
-                        "id": str(tag["id"]),
-                        "removed": tag["removed"],
-                        "name": tag["name"]
-                    } for tag in group["tags"]
-                ]
+                "embedding": group.get("embedding", ""),
+                "created": group.get("created", False),
             }
+            if "tags" in group:
+                formatted_group["tags"] = [
+                        {
+                            "id": str(tag["id"]),
+                            "removed": tag.get("removed", False),
+                            "name": tag["name"]
+                        } for tag in group["tags"]
+                    ]
             if "dad_tags" in group:
                 formatted_group["dad_tags"] = group["dad_tags"]
             formatted_groups.append(formatted_group)
@@ -270,56 +271,53 @@ class TagCleanerAgent:
 
         all_tags = state["all_raw_tags"]
         groups = []
-        processed_tags = set()
-        print(f'Verificando {len(all_tags)} tags...')
-        for i in range(len(all_tags)):
-            tag_a = all_tags[i]
-            tag_a["removed"] = False
-            if (tag_a["id"] in processed_tags):
-                continue
+        
+        # Usando Agglomerative Clustering para um agrupamento mais robusto.
+        from sklearn.cluster import AgglomerativeClustering
 
-            current_group = {
-                "name":"",
-                "embedding":"",
-                "created": False,
-                "tags": []
-            }
+        # Garante que os embeddings sejam um array 2D
+        embeddings = np.array([tag['embedding'] for tag in all_tags])
 
-            current_group["tags"].append(tag_a)
-            processed_tags.add(tag_a["id"])
-            for j in range(i+1, len(all_tags)):
-                tag_b = all_tags[j]
-                tag_b["removed"] = False
-                if (tag_b["id"]  in processed_tags):
-                    continue
+        # Configura o clustering. 'distance_threshold' é o inverso da similaridade.
+        # 'n_clusters=None' garante que o threshold seja o critério de parada.
+        # 'linkage='average'' usa a média das distâncias, similar ao nosso centroide.
+        clustering = AgglomerativeClustering(
+            n_clusters=None,
+            distance_threshold=1 - SIMILARITY_THRESHOLD,
+            metric='cosine',
+            linkage='average'
+        ).fit(embeddings)
 
-                similarity = np.dot(tag_a["embedding"], tag_b["embedding"]) / (np.linalg.norm(tag_a["embedding"]) * np.linalg.norm(tag_b["embedding"]))
-                distance = 1 - similarity
+        # 'clustering.labels_' contém o ID do cluster para cada tag.
+        num_clusters = clustering.n_clusters_
+        cluster_labels = clustering.labels_
 
-                if (similarity  >= SIMILARITY_THRESHOLD):
-                    current_group["tags"].append(tag_b)
-                    processed_tags.add(tag_b["id"])   
+        # Organiza as tags em seus respectivos clusters.
+        clusters = {i: [] for i in range(num_clusters)}
+        for i, tag in enumerate(all_tags):
+            clusters[cluster_labels[i]].append(tag)
 
-            if (len(current_group["tags"]) > 1):
-                groups.append(current_group)
+        # Converte os clusters em grupos, ignorando "grupos" de uma única tag.
+        for cluster_id, tags_in_cluster in clusters.items():
+            if len(tags_in_cluster) > 1:
+                for tag in tags_in_cluster:
+                    tag["removed"] = False
+                groups.append({
+                    "name": "",
+                    "embedding": "",
+                    "created": False,
+                    "tags": tags_in_cluster
+                })
         
         print(f'Agrupamento bem sucedido!')
         print(f'Formados {len(groups)} grupos de tags!')
 
-        # Coletar as tags que não foram agrupadas (isoladas)
-        grouped_tag_ids = set()
-        for group in groups:
-            for tag in group["tags"]:
-                grouped_tag_ids.add(tag["id"])
-
-        tags_not_in_groups = []
-        for tag in all_tags:
-            if tag["id"] not in grouped_tag_ids:
-                tags_not_in_groups.append(tag)
-        
+        # Salva no log apenas os grupos reais que foram formados.
+        # As tags isoladas serão tratadas nas etapas seguintes.
         self.logger.create_new_log(groups=groups).save_log()
 
-        return {"tag_groups": groups, "tags_not_in_groups": tags_not_in_groups}
+        # Passa adiante a lista original de tags para que as isoladas possam ser identificadas depois.
+        return {"tag_groups": groups, "all_raw_tags": all_tags}
 
     def define_group_names(self, state: State):
         """Remove tags estrangeiras e escolhe um nome para cada grupo de tags."""
@@ -327,8 +325,14 @@ class TagCleanerAgent:
         print("\n--- LIMPEZA DE GRUPOS DE TAGS E NOMEAÇÃO  ---")
 
         groups = state["tag_groups"]
-
+        
+        if not groups:
+            print("Nenhum grupo para nomear. Pulando etapa.")
+            return {"tag_groups": [], "tags_not_in_groups": []}
+            
         print(f'Total de {len(groups)} grupos de tags a serem limpados e nomeados!')
+
+        BATCH_SIZE = 10 # Define o número de grupos a serem processados por lote
 
         prompts = []
         for group in groups:
@@ -336,81 +340,107 @@ class TagCleanerAgent:
             # O modelo retornará os nomes das tags a serem removidas.
             tag_names = [tag["name"] for tag in group["tags"]]
             prompt = f"""
-                Você é um taxonomista acadêmico. Sua tarefa é analisar o seguinte grupo de tags de pesquisa, remover as que não pertencem e criar um nome canônico para o grupo.
-                Grupo de tags (apenas nomes): {tag_names}
+                Você é um taxonomista acadêmico sênior. Sua tarefa é analisar o seguinte grupo de tags de pesquisa e criar um nome canônico e abrangente para ele. O agrupamento já foi feito por similaridade semântica, então sua função é encontrar o melhor nome que represente o conjunto.
+                Grupo de tags: {tag_names}
 
-                O nome canônico do grupo deve ser:
+                O nome canônico do grupo deve ser OBRIGATORIAMENTE:
                 - Um nome de campo de estudo formal e específico (ex: "Engenharia de Software", não "Software").
-                - Concisa, com no máximo 3 palavras obrigatoriamente.
-                - Generalista o suficiente para abranger os conceitos centrais.
-                - Representativa de todas as tags do grupo.
+                - Concisa, com NO MÁXIMO 4 palavras.
+                - Generalista o suficiente para englobar a maioria dos conceitos no grupo.
+                - Não misture assuntos (ex: "Política e Cidadania" é inválido, ou só "Política" ou "Cidadania").
 
                 Instruções:
-                1.  Identifique o tema central do grupo.
-                2.  Crie um `group_name` que siga as regras acima.
-                3.  Liste em `removed_tags` os NOMES de quaisquer tags que sejam outliers e não se encaixem no tema central do grupo. Se nenhuma tag precisar ser removida, retorne uma lista vazia.
+                1.  Identifique o tema central ou a interseção dos temas no grupo e crie um `group_name` que o represente.
+                2.  Seja tolerante com a diversidade de tags. Apenas liste em `removed_tags` os NOMES de tags que são EXTREMAMENTE discrepantes e claramente um erro de agrupamento (ex: 'Culinária Francesa' em um grupo sobre 'Inteligência Artificial').
+                3.  Priorize manter as tags no grupo. Se uma tag for apenas um pouco diferente, mantenha-a. Remova no máximo 10% das tags. Se nenhuma tag precisar ser removida, retorne uma lista vazia.
+
+                Sua resposta DEVE ser um objeto JSON formatado.
 
                 **Exemplo de Resposta:**
                 - **Exemplo 1 (Grupo Coeso):**
                   - Tags de Entrada: `['Desenvolvimento de Software', 'Engenharia de Software Ágil', 'Testes de Software', 'Arquitetura de Microserviços']`
                   - Resposta Esperada: `{{ "group_name": "Engenharia de Software", "removed_tags": [] }}`
-                - **Exemplo 2 (Com Outlier):**
-                  - Tags de Entrada: `['Inteligência Artificial', 'Redes Neurais', 'Aprendizado de Máquina', 'Culinária Francesa']`
-                  - Resposta Esperada: `{{ "group_name": "Inteligência Artificial", "removed_tags": ["Culinária Francesa"] }}`
-
-                Sua resposta DEVE ser um objeto JSON formatado.
+                - **Exemplo 2 (Grupo Diverso mas Coerente):**
+                  - Tags de Entrada: `['Educação a Distância', 'Desenvolvimento de Software', 'Informática na Educação', 'Gestão de Projetos de TI']`
+                  - Resposta Esperada: `{{ "group_name": "Tecnologia na Educação e Gestão", "removed_tags": [] }}`
             """
             prompts.append(prompt)
 
-        # O método .batch() executa todas as chamadas de API em paralelo.
-        # Usamos um try-except para lidar com grupos muito grandes que podem exceder o limite de tokens.
-        try:
-            # Tentativa inicial com um limite de tokens razoável para eficiência.
-            print("Executando nomeação em lote com limite de 4096 tokens...")
-            responses = self.structured_llm.with_config({"max_concurrency": 5}).batch(prompts, max_tokens=4096)
-        except Exception as e:
-            # Se a tentativa inicial falhar (provavelmente por limite de tokens),
-            # tentamos novamente com um limite muito maior como fallback.
-            print(f"Falha na primeira tentativa ({e}). Tentando novamente com limite de 8192 tokens...")
-            responses = self.structured_llm.with_config({"max_concurrency": 5}).batch(prompts, max_tokens=8192)
+        responses = []
+        # Processa os prompts em lotes menores para evitar erros de limite de token.
+        for i in range(0, len(prompts), BATCH_SIZE):
+            batch_prompts = prompts[i:i + BATCH_SIZE]
+            print(f"Processando lote de nomeação de grupos {i//BATCH_SIZE + 1}/{(len(prompts) + BATCH_SIZE - 1)//BATCH_SIZE}...")
+            try:
+                batch_responses = self.structured_llm.with_config({"max_concurrency": 5}).batch(batch_prompts, max_tokens=4096)
+                responses.extend(batch_responses)
+            except Exception as e:
+                print(f"  -> Erro no lote: {e}. As tags deste lote não serão nomeadas.")
+                # Adiciona respostas vazias para manter o alinhamento com os grupos
+                responses.extend([RefinedGroup(group_name="ERRO_NO_PROCESSAMENTO", removed_tags=[]) for _ in batch_prompts])
         
-        tags_not_in_groups = state["tags_not_in_groups"][:]
+        removed_tags_globally = []
         
         for tag_group, response in zip(groups, responses):
+            if response.group_name == "ERRO_NO_PROCESSAMENTO":
+                # Pula grupos que falharam para evitar quebrar o fluxo
+                removed_tags_globally.extend(tag_group["tags"])
+                tag_group["tags"] = [] 
+                continue
+
             # Mapeia os nomes das tags removidas de volta para seus IDs.
             tag_name_to_id_map = {tag["name"]: tag["id"] for tag in tag_group["tags"]}
             removed_ids = {tag_name_to_id_map[name] for name in response.removed_tags if name in tag_name_to_id_map}
 
             # Captura as tags que foram removidas para tratá-las como isoladas
             removed_tags_objects = [tag for tag in tag_group["tags"] if tag["id"] in removed_ids]
+            for removed_tag in removed_tags_objects:
+                print(f'  -> Tag removida do grupo: {removed_tag["name"]}')
+
             if removed_tags_objects:
                 print(f'  -> {len(removed_tags_objects)} tags foram removidas do grupo e serão tratadas como isoladas.')
-                tags_not_in_groups.extend(removed_tags_objects)
+                removed_tags_globally.extend(removed_tags_objects)
 
             # Atualiza o grupo com o novo nome e a lista de tags limpa
             tag_group["name"] = response.group_name
             tag_group["tags"] = [tag for tag in tag_group["tags"] if tag["id"] not in removed_ids]
-            print(f'Total de {len(tag_group["tags"])} tags unificadas na Tag \'{response.group_name}\'!')
+            if tag_group["tags"]:
+                print(f'Total de {len(tag_group["tags"])} tags unificadas na Tag \'{response.group_name}\'!')
+        
+        # Filtra grupos que podem ter ficado vazios após a remoção ou erro
+        groups = [g for g in groups if g["tags"]]
         
         print("Limpeza e nomeação bem sucedidas!")
 
         self.logger.currentLog.set_groups(groups).save_log() # O log reflete os grupos após a limpeza
 
-        return {"tag_groups": groups, "tags_not_in_groups": tags_not_in_groups}
+        return {"tag_groups": groups, "tags_not_in_groups": removed_tags_globally}
         
     def classify_tags_for_dad_tags(self, state: State):
         """Classifica as tags em DAD ou não DAD"""
         print("\n--- CLASSIFICAÇÃO DE TAGS EM DAD OU NÃO DAD  ---")
         
         groups = state["tag_groups"][:] # Copia a lista para evitar modificar a original diretamente no loop
-        tags_not_in_groups = state["tags_not_in_groups"][:]
-        
-        # Garante que todas as tags (agrupadas, isoladas e pais) tenham uma estrutura consistente.
-        all_tags = groups + [
-            {"name": tag["name"], "embedding": "", "created": False, "tags": [tag]} 
-            for tag in tags_not_in_groups
+        all_raw_tags = state["all_raw_tags"]
+
+        # Identifica todas as tags que estão dentro de grupos já processados.
+        grouped_tag_ids = set()
+        for group in groups:
+            for tag in group["tags"]:
+                grouped_tag_ids.add(tag["id"])
+
+        # As tags isoladas são todas as tags originais que NÃO estão nos grupos finais.
+        isolated_tags = [
+            tag for tag in all_raw_tags if tag["id"] not in grouped_tag_ids
         ]
 
+        # Estrutura as tags isoladas como "grupos de um" para processamento unificado.
+        isolated_tags_as_groups = [{
+            "name": tag["name"], "embedding": "", "created": False, "tags": [tag]
+        } for tag in isolated_tags]
+
+        # A lista final de trabalho contém os grupos reais + as tags isoladas.
+        all_tags = groups + isolated_tags_as_groups
         all_dad_tags = set()
 
         print(f'Total de {len(all_tags)} tags a serem classificados!')
