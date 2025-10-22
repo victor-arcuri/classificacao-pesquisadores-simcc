@@ -266,7 +266,7 @@ class TagCleanerAgent:
 
         # Configura o clustering. 'distance_threshold' é o inverso da similaridade.
         # 'n_clusters=None' garante que o threshold seja o critério de parada.
-        # 'linkage='average'' usa a média das distâncias, similar ao nosso centroide.
+        # 'linkage='average'' usa a média das distâncias.
         clustering = AgglomerativeClustering(
             n_clusters=None,
             distance_threshold=1 - SIMILARITY_THRESHOLD,

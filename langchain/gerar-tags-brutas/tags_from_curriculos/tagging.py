@@ -63,12 +63,22 @@ def generate_tags_from_column(client: ChatOpenAI, chunks: list[str], column_name
         ---
 
         Diretrizes:
-        - Tags devem ser conceitos, áreas de conhecimento ou metodologias. Em português.
-        - Máximo de 3 palavras por tag.
-        - Evite: nomes, instituições, siglas e termos genéricos (ex: 'artigo', 'pesquisa').
-        - Bons exemplos: 'Tecnologia da Informação', 'Pesquisa Científica', 'Ciência da Computação', 'Robótica Educacional'.
+        - As tags devem representar **conceitos, áreas de conhecimento, metodologias ou tecnologias**. Em português.
+        - Máximo de **3 palavras por tag**.
+        - Evite:
+        - nomes próprios (de pessoas, cidades, instituições, congressos, etc.),
+        - siglas ou abreviações isoladas,
+        - termos genéricos (ex: "artigo", "pesquisa", "estudo", "caso"),
+        - nomes de **doenças, vírus, bactérias ou agentes biológicos** (ex: "Covid-19", "Dengue", "Zika", "HTLV-1").
+        - Se o texto mencionar doenças, epidemias ou vírus, **extraia a área, metodologia ou processo associado**  
+        (por exemplo: "Epidemiologia", "Difusão de Doenças", "Estudos de Transmissão", "Vigilância Epidemiológica")  
+        em vez do nome da doença.
+        - Prefira termos conceituais, amplos e neutros.
+        - Bons exemplos: "Tecnologia da Informação", "Ciência de Dados", "Educação Ambiental", "Robótica Educacional".
+        - Maus exemplos: "Dengue", "Zika", "Covid-19", "HTLV-1".
 
-        Responda APENAS com as tags separadas por vírgula.
+        Responda **somente com as tags**, separadas por vírgula.
+
         """)
     tag_extraction_chain = tag_extraction_prompt | client | StrOutputParser()
 
