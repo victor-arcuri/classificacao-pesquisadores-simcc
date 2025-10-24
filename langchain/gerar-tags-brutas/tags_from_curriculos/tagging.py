@@ -134,13 +134,15 @@ def generate_tags_for_researcher(client: ChatOpenAI, chunks_dict: dict) -> list[
 # Pipeline principal
 def generate_tags_pipeline(client: ChatOpenAI, pesquisadores: dict) -> tuple[dict, list[str]]:
     tags_por_pesquisador = {}
-    i = 1
+    i = 0
     for pesquisador, chunks_dict in pesquisadores.items():
-        if i < 2:
+        if i < 10:
             print(f"Gerando tags para {pesquisador}...")
             tags_por_pesquisador[pesquisador] = generate_tags_for_researcher(client, chunks_dict)
             i += 1
-        break
+        else: break
+
+    print(f"Foram geradas tags para {i} pesquisadores.")
     
     tags_globais = set()
     for t_list in tags_por_pesquisador.values():

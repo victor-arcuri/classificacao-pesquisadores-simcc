@@ -12,11 +12,12 @@ import os
 import ast 
 import json
 from datetime import datetime
+import time
 
 ''' 
 - inserir todas as tags (sem considerar hierarquia nenhuma também) depois de otimizado para todos os pesquisadores - OK
 - incluir tags que não foram agrupadas (isoladas) na tabela de tags - OK
-- modificar o schema para nova tabela de hierarquia e criar nova migration
+- modificar o schema para nova tabela de hierarquia e criar nova migration - OK
 - inserir hierarquia de tags - OK
 - criar condição para tags pais e filhas iguais
 - criar dicionários com chaves (tags_pais) com valores (tags_filhas) para facilitar inserção no banco - OK
@@ -60,6 +61,7 @@ DAD_TAGS = [
     "Computação", 
     "Engenharia", 
     "Tecnologia",
+    "Jogos",
 
     # Artes e Comunicação
     "Arte",
@@ -428,6 +430,7 @@ class TagCleanerAgent:
         # A lista final de trabalho contém os grupos reais + as tags isoladas.
         all_tags = groups + isolated_tags_as_groups
         all_dad_tags = set()
+        tags_to_keep = [] # Nova lista para armazenar as tags que não são duplicadas
 
         print(f'Total de {len(all_tags)} tags a serem classificados!')
         
@@ -436,24 +439,32 @@ class TagCleanerAgent:
             prompt = f"""
                 Você é um taxonomista sênior e especialista em categorização de áreas de pesquisa. Sua tarefa é identificar a **disciplina-raiz** da tag de pesquisa '{tag_name}' dentre essas tags pré-definidas: {DAD_TAGS}.
 
-                **Instruções Extremamente Rigorosas:**
-                1.  **Identifique a Origem:** Sua principal tarefa é encontrar a **área-mãe** mais fundamental da qual a tag deriva. Se a tag é uma aplicação de uma ciência, priorize a ciência, não a aplicação.
-                2.  **Hierarquia Estrita:** Pense como um bibliotecário: em qual prateleira principal este livro pertence? A tag '{tag_name}' é um subcampo direto de qual campo da lista?
-                3.  **Seja Minimalista:** Retorne no máximo 2 campos. O primeiro deve ser a área-mãe. O segundo, opcional, só deve ser usado se a tag for intrinsecamente uma fusão de duas áreas fundamentais.
-                
+                **Instruções Extremamente Rígidas:**
+                1.  **Análise de Componentes:** Se a tag for composta (ex: "Robótica e Inteligência Artificial"), analise cada componente e encontre a disciplina-raiz para cada um.
+                2.  **Priorize a Especificidade:** Evite uma categoria genérica se uma mais específica da lista se encaixar melhor. Por exemplo, para "Otimização de Sistemas", prefira 'Computação' ou 'Matemática' em vez de apenas 'Engenharia'.
+                3.  **Identifique a Origem:** Sua principal tarefa é encontrar a **área-mãe** mais fundamental. Se a tag é uma aplicação de uma ciência, priorize a ciência, não a aplicação.
+                4.  **Hierarquia Estrita:** Pense como um bibliotecário: em qual prateleira principal este livro pertence? A tag '{tag_name}' é um subcampo direto de qual campo da lista?
+                5.  **Seja Minimalista:** Retorne no máximo 2 campos. O primeiro deve ser a área-mãe. O segundo, opcional, só deve ser usado se a tag for intrinsecamente uma fusão de duas áreas fundamentais.
+                6.  **Evitar Duplicatas:** Se a tag de pesquisa for semânticamente ou gramaticalmente *MUITO* parecida com alguma tag pré-definida, retorne nulo.
+
                 **Exemplos de Classificação Correta:**
                 - Para a tag 'Teoria dos Jogos', a resposta DEVE ser apenas ['Matemática'], pois é sua disciplina de origem, mesmo que seja aplicada em 'Economia' e 'Ciência Política'.
                 - Para a tag 'Energia Renovável', a resposta DEVE ser ['Sustentabilidade', 'Engenharia'], pois combina conceitos de ambas as áreas de forma central. NÃO inclua 'Tecnologia' ou 'Ecologia' como campos separados.
                 - Para a tag 'Saúde Pública', a resposta DEVE ser ['Saúde', 'Políticas Públicas'], pois é a interseção direta desses dois campos.
                 - Para a tag 'Modelagem Matemática', a resposta DEVE ser ['Matemática']. 'Ciência de Dados' é uma aplicação, não a origem.
+                - Para a tag 'Robótica e Inteligência Artificial', a resposta DEVE ser ['Computação', 'Engenharia'].
+                - Para a tag 'Otimização de Sistemas', a resposta DEVE ser ['Computação', 'Matemática'].
                 
                 Responda APENAS com os campos que estão **EXATAMENTE** como na lista fornecida. Não invente, modifique ou adicione nenhuma outra tag.
             """
 
             response = self.dad_tag_classifier_llm.invoke(prompt)
 
-            # Filtra a resposta para garantir que apenas tags da lista DAD_TAGS sejam usadas.
-            valid_dad_tags = [tag for tag in response.dad_tags if tag in DAD_TAGS]
+            if not response or not response.dad_tags:
+                print(f'A tag \'{tag_name}\' foi identificada como duplicata de uma tag-pai e será descartada.')
+                continue 
+
+            valid_dad_tags = [t for t in response.dad_tags if t in DAD_TAGS]
 
             for dad_tag in valid_dad_tags:
                 all_dad_tags.add(dad_tag)
@@ -461,8 +472,12 @@ class TagCleanerAgent:
             # Cria um dicionário com chaves dad_tag1, dad_tag2, etc.
             dad_tag_dict = {f"dad_tag{i+1}": tag for i, tag in enumerate(valid_dad_tags)}
             tag["dad_tags"] = dad_tag_dict
+            
             # Cada tag tem uma chave "dad_tags" que é um dicionário com as dad_tags classificadas para ela
             print(f'A tag \'{tag_name}\' foi classificada em: {dad_tag_dict if dad_tag_dict else "Nenhuma"}')
+            
+            # Adiciona a tag processada à lista de tags a serem mantidas
+            tags_to_keep.append(tag)
 
         self.logger.currentLog.set_groups(groups).save_log()
 
@@ -470,12 +485,12 @@ class TagCleanerAgent:
         # para que elas também possam ter seus embeddings gerados e serem inseridas no banco.
         for dad_tag_name in all_dad_tags:
             # Adiciona como se fosse um novo grupo/tag isolada, mantendo a estrutura.
-            all_tags.append(
+            tags_to_keep.append(
                 {"name": dad_tag_name, "embedding": "", "created": False, "tags": []}
             )
 
         print(f"\nTotal de {len(all_dad_tags)} dad_tags únicas encontradas.")
-        return {"all_tags": all_tags, "unique_dad_tags": list(all_dad_tags)}
+        return {"all_tags": tags_to_keep, "unique_dad_tags": list(all_dad_tags)}
 
     def generate_embeddings_for_tags(self, state: State):
         """Gera os embeddings para todas as tags"""
@@ -599,6 +614,8 @@ class TagCleanerAgent:
         return graph_builder.compile()
 
 def main():
+    start_time = time.time()
+    print("--- INICIANDO SCRIPT DE OTIMIZAÇÃO DE TAGS ---")
     usuario = os.getenv('DB_USERNAME')
     senha = os.getenv('DB_SENHA')
     host = 'localhost'
@@ -610,6 +627,13 @@ def main():
     agent = TagCleanerAgent(db_url, logger)
     graph = agent.create_graph()
     final_state = graph.invoke({})
+    
+    end_time = time.time()
+    duration = end_time - start_time
+    minutes = int(duration // 60)
+    seconds = int(duration % 60)
+    print(f"\n--- FIM DA EXECUÇÃO ---")
+    print(f"Duração total do script: {minutes} minutos e {seconds} segundos.")
 
 if __name__ == "__main__":
     dotenv.load_dotenv()

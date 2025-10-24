@@ -62,7 +62,10 @@ def main():
     
     # Gerar tags
     client = criar_client()
+    inicio_geracao_tags = time.time()
     tags_por_pesquisador, tags_globais = generate_tags_pipeline(client, dados_processados)
+    fim_geracao_tags = time.time()
+    print(f"Geração de tags durou: {fim_geracao_tags-inicio_geracao_tags:.2f} segundos.")
     visualize_tags(tags_por_pesquisador, tags_globais)
     criar_conexao_e_inserir_tags_globais(tags_globais)
     
