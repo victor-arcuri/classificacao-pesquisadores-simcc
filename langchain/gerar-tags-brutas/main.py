@@ -1,7 +1,7 @@
 import time
 from curriculo_information.scripts.config import carregar_chave_api
 from curriculo_information.scripts.data_processor import processar_linhas_csv
-from curriculo_information.scripts.embedding_generator import gerar_embeddings_e_criar_dataframe
+from curriculo_information.scripts.generate_chunks_embeddings import gerar_embeddings_e_criar_dataframe
 from curriculo_information.scripts.output_utils import visualizar_dataframe, visualizar_chunks
 from curriculo_information.scripts.include_embeddings import criar_conexao_e_inserir_dados
 from tags_from_curriculos.tagging import generate_tags_pipeline, visualize_tags, criar_client
@@ -55,14 +55,17 @@ def main():
     # Visualizar as embeddings no dataframe
     #visualizar_dataframe(df_final)
     
-    print("\n\n\n")
+    print("\n")
     
     # Criar conexão e popular o banco com embeddings
     #criar_conexao_e_inserir_dados(df_final)
     
     # Gerar tags
     client = criar_client()
+    inicio_geracao_tags = time.time()
     tags_por_pesquisador, tags_globais = generate_tags_pipeline(client, dados_processados)
+    fim_geracao_tags = time.time()
+    print(f"Geração de tags durou: {fim_geracao_tags-inicio_geracao_tags:.2f} segundos.")
     visualize_tags(tags_por_pesquisador, tags_globais)
     criar_conexao_e_inserir_tags_globais(tags_globais)
     
