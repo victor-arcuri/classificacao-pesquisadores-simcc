@@ -3,7 +3,7 @@ CREATE TABLE "public"."researcher_tags" (
     "created_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "name" VARCHAR(100) NOT NULL UNIQUE,
-    "embedding" vector(256),
+    "embedding" vector(1536),
     "parent_tag" UUID DEFAULT NULL,
 
     CONSTRAINT "researcher_tags_pkey" PRIMARY KEY ("id")
