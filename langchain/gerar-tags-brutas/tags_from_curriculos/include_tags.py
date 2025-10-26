@@ -15,7 +15,7 @@ def criar_conexao_e_inserir_tags_globais(tags_globais: list[str]):
         usuario = os.getenv('DB_USERNAME')
         senha = os.getenv('DB_SENHA')
         host = 'localhost'
-        porta = os.getenv('DB_PORT_HOST')
+        porta = os.getenv('DB_PORT')
         banco = os.getenv('DB_NAME')
         
         connection_string = f'postgresql+psycopg2://{usuario}:{senha}@{host}:{porta}/{banco}'
