@@ -37,11 +37,11 @@ class DatabaseConnection:
             # Carrega as variáveis de ambiente
             load_dotenv()
             cls._instance._db_params = {
-                'host': os.getenv('DB_HOST'),
+                'host': 'localhost',
                 'port': os.getenv('DB_PORT', 5432),
                 'database': os.getenv('DB_NAME'),
-                'user': os.getenv('DB_USER'),
-                'password': os.getenv('DB_PASSWORD')
+                'user': os.getenv('DB_USERNAME'),
+                'password': os.getenv('DB_SENHA')
             }
                     
         return cls._instance
