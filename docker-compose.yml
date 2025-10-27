@@ -1,0 +1,43 @@
+services:
+  database:
+    image: pgvector/pgvector:pg17
+    restart: always
+    environment:
+      POSTGRES_PASSWORD: ${DB_SENHA}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports: 
+      - "${DB_PORT}:${DB_PORT}"
+    container_name: ${DB_NOME_CONTAINER}
+
+  front:
+    depends_on: 
+        api:
+          condition: service_started
+    build:
+        context: ./classificacao-front
+        dockerfile: front.dockerfile
+        target: prod
+    image: ${FRONT_NOME_IMAGEM}
+    container_name: ${FRONT_NOME_CONTAINER}
+    ports:
+      - "${FRONT_PORT}:${FRONT_PORT}"
+
+  api:
+    depends_on: 
+      database:
+        condition: service_started
+    build: 
+      context: ./api
+      dockerfile: api.dockerfile
+      target: prod
+    image: ${API_NOME_IMAGEM}
+    container_name: ${API_NOME_CONTAINER}
+    ports:
+      - "${API_PORT}:${API_PORT}"
+    environment:
+      FRONT_URL: "http://localhost:${FRONT_PORT}"
+      API_PORT: ${API_PORT}
+      DATABASE_URL: "postgresql://${DB_USERNAME}:${DB_SENHA}@database:${DB_PORT}/${DB_NAME}"
+volumes:
+  pgdata:

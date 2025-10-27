@@ -619,7 +619,7 @@ def main():
     usuario = os.getenv('DB_USERNAME')
     senha = os.getenv('DB_SENHA')
     host = 'localhost'
-    porta = os.getenv('DB_PORT_HOST')
+    porta = os.getenv('DB_PORT')
     banco = os.getenv('DB_NAME')
 
     db_url = f"postgresql://{usuario}:{senha}@{host}:{porta}/{banco}"
