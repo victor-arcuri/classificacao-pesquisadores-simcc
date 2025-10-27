@@ -38,7 +38,7 @@ RUN npx prisma generate
 
 COPY . .
 
-CMD ["npm", "run", "dev", ]
+CMD ["npm", "run", "dev" ]
 
 
 
