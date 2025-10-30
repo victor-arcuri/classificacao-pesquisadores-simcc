@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 import os
 import time
 from typing import List, Tuple
+from openai import RateLimitError
 
 BATCH_SIZE = 10 # Define o tamanho do lote para as chamadas à API
 
@@ -38,18 +39,21 @@ def classificar_coluna(tags: List[Tuple[str, str]], client: ChatOpenAI, column_n
 
     # Criação do prompt e chain
     classification_prompt = ChatPromptTemplate.from_template("""
-    Classifique o texto da coluna '{column_name}' com um número entre 0 e 3 tags mais relevantes e significativas do banco de tags fornecido.
+    Você é um especialista em classificação. Sua tarefa é analisar um trecho de texto e associá-lo a até 3 tags de um banco de tags pré-definido.
 
-    Coluna '{column_name}':
+    Texto da coluna '{column_name}':
     {chunk_text}
 
     Banco de Tags:
     {tag_names}
 
     REGRAS:
-        1. Classifique apenas com as tags que existirem no banco de tags
-        2. Apenas classifique com tags que façam sentido com o conteúdo da coluna
-        3. Caso não hajam tags coerentes, retorne uma lista vazia
+        1. Use SOMENTE tags que existem no "Banco de Tags".
+        2. As tags devem ser estritamente relevantes ao conteúdo do texto.
+        3. Se nenhuma tag for relevante, retorne uma lista vazia.
+        4. Sua resposta DEVE ser um objeto JSON, contendo uma única chave "tags" com uma lista de nomes de tags. Não inclua nenhuma explicação ou texto adicional.
+
+    Exemplo de resposta: {{"tags": ["Nome da Tag 1", "Nome da Tag 2"]}}
     """)
 
     parser = JsonOutputParser(pydantic_object=TagList)
@@ -67,14 +71,24 @@ def classificar_coluna(tags: List[Tuple[str, str]], client: ChatOpenAI, column_n
     # Mudança para execução em lote
     for i in range(0, len(prompts), BATCH_SIZE):
         batch = prompts[i:i + BATCH_SIZE]
-        try:
-            responses = classification_chain.batch(batch, config={"max_concurrency": 5})
-            for response in responses:
-                ai_tag_names = response.get("tags", [])
-                result_tuples = [tag_map[name] for name in ai_tag_names if name in tag_map]
-                all_tags_for_column.update(result_tuples)
-        except Exception as e:
-            print(f"Erro ao classificar lote para a coluna '{column_name}': {e}")
+        
+        # Lógica de tentativa e espera (retry) para lidar com Rate Limit
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                responses = classification_chain.batch(batch, config={"max_concurrency": 3}) # Concorrência reduzida para 3
+                for response in responses:
+                    ai_tag_names = response.get("tags", [])
+                    result_tuples = [tag_map[name] for name in ai_tag_names if name in tag_map]
+                    all_tags_for_column.update(result_tuples)
+                break # Se bem-sucedido, sai do loop de tentativas
+            except RateLimitError as e:
+                wait_time = 2 ** attempt # Espera exponencial (1, 2, 4 segundos...)
+                print(f"Rate limit atingido na coluna '{column_name}'. Tentando novamente em {wait_time}s... (Tentativa {attempt + 1}/{max_retries})")
+                time.sleep(wait_time)
+            except Exception as e:
+                print(f"Erro inesperado ao classificar lote para a coluna '{column_name}': {e}")
+                break # Sai do loop de tentativas em caso de outros erros
 
     return list(all_tags_for_column)
 
