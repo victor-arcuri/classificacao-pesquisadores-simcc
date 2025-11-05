@@ -11,7 +11,6 @@ interface TagAreaProps {
     allResearchersByCategory: ResearchersByCategory[]
 }
 
-
 export default function TagArea({loading=false, tags=[], onTagClick, selectedTag, allResearchersByCategory}: TagAreaProps){
 
     return (
@@ -24,10 +23,19 @@ export default function TagArea({loading=false, tags=[], onTagClick, selectedTag
             `}
         >
             {tags.map((tag) => (
-                <div className="flex" key={tag.name}>
-                    <Tag tagText={tag.name} onTagClick={onTagClick} selected={selectedTag === tag.name} />
+                    <div>
                     <TaggedResearchers isLoadingTagData={loading && selectedTag === tag.name} isActive={selectedTag === tag.name} researchers={allResearchersByCategory.find(researchers=> (researchers.category == tag.name))?.researchers} />
+                    </div>
+                    /*
+                <div className="flex flex-col justify-between" key={tag.name}>
+                    <div>
+                    <Tag tagText={tag.name} onTagClick={onTagClick} selected={selectedTag === tag.name} />
+                    </div>
+                    <div>
+                    <TaggedResearchers isLoadingTagData={loading && selectedTag === tag.name} isActive={selectedTag === tag.name} researchers={allResearchersByCategory.find(researchers=> (researchers.category == tag.name))?.researchers} />
+                    </div>
                 </div>
+*/
             ))}
         
         </div>

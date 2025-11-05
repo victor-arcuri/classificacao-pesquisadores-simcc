@@ -44,7 +44,7 @@ export default function Home() {
     setLoading(true);
     const handler = setTimeout(async () => {
       try {
-        const res = await fetch(`http://localhost:5000/api/researchers?tag=${encodeURIComponent(selectedTag)}`);
+        const res = await fetch(`http://localhost:3001/api/researchers?tag=${encodeURIComponent(selectedTag)}`);
 
         if (!res.ok) {
           console.debug("Erro HTTP:", res.status, res.statusText);
@@ -86,7 +86,7 @@ export default function Home() {
     const handler = setTimeout(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`http://localhost:5000/api/search?search=${encodeURIComponent(query)}`);
+      const res = await fetch(`http://localhost:3001/api/search?search=${encodeURIComponent(query)}`);
   
       if (!res.ok) {
         console.debug("Erro HTTP:", res.status, res.statusText);
