@@ -5,9 +5,12 @@ function normalizeQuery(query: string) {
   return query.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
 }
 
-export async function searchTag(query: string, minTsRank: number = 0.01, minTrgmScore: number = 0.25): Promise<MatchingTag[]>{
+export async function searchTag(query: string, minTsRank: number = 0.01, minTrgmScore: number = 0.6): Promise<MatchingTag[]>{
     const normalizedQuery = normalizeQuery(query);
-    const tsQueryString = normalizedQuery.split(/\s+/).join(' & ');
+    const tsQueryString = normalizedQuery.split(/\s+/)
+                                    .filter(term => term.length > 0) // evita termos vazios
+                                    .map(term => term + ':*')         // busca pelo prefixo
+                                    .join(' & ');
     console.log(tsQueryString)
 
     const results = await prisma.$queryRawUnsafe<MatchingTag[]>(`
@@ -40,19 +43,12 @@ export async function searchTag(query: string, minTsRank: number = 0.01, minTrgm
       public.tags_hierarchy.parent_tag_id,
       public.researcher_tags.search_vector
     ORDER BY
-      -- Passo 1: Prioriza resultados que tiveram qualquer pontuação semântica
-      CASE WHEN ts_rank(public.researcher_tags.search_vector, to_tsquery('portuguese_unaccent', $1)) > 0 THEN 1 ELSE 0 END DESC,
-      
-      -- Passo 2: Para os resultados que passaram no passo 1, ordena pelo score combinado
-      (
-        ts_rank(public.researcher_tags.search_vector, to_tsquery('portuguese_unaccent', $1)) * 0.9 +
-        similarity(
-          LOWER(unaccent(public.researcher_tags.name)),
-          LOWER(unaccent($2))
-        ) * 0.1
-      ) DESC
+      -- Prioriza o score do FTS (semântica/prefixo)
+      ts_score DESC,
+      -- Usa o trigrama (typos) como desempate
+      trgm_score DESC
     LIMIT 10;
-  `,
+    `,
     tsQueryString,
     normalizedQuery,
     minTsRank,
