@@ -49,8 +49,8 @@ export default function Home() {
       setSelectedTag(null); 
       
       try {
-        const res = await fetch(`http://localhost:3001/api/search?search=${encodeURIComponent(query)}`);
-
+        const res = await fetch(`/proxy/api/search?search=${encodeURIComponent(query)}`);
+        
         if (!res.ok) {
           console.debug("Erro HTTP ao buscar tags:", res.status, res.statusText);
           setTags([]); 
@@ -88,8 +88,8 @@ export default function Home() {
     setLoading(true);
     const handler = setTimeout(async () => {
       console.log("🟡 Buscando pesquisadores para:", selectedTag);
-      try {
-        const res = await fetch(`http://localhost:3001/api/researchers?tag=${encodeURIComponent(selectedTag)}`);
+      try   {
+        const res = await fetch(`/proxy/api/researchers?tag=${encodeURIComponent(selectedTag)}`);
 
         if (!res.ok) {
           console.debug("❌ Erro HTTP:", res.status, res.statusText);
